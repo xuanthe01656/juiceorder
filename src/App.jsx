@@ -501,7 +501,25 @@ export default function App() {
 
     return docRef.id;
   };
+  const sendTelegramNotification = async (message) => {
+    const response = await fetch("/api/send-telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: message,
+      }),
+    });
 
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      throw new Error(data.message || "Không gửi được Telegram");
+    }
+
+    return data;
+  };
   const copyOrderMessage = async () => {
     if (!order.items.length) {
       alert("Vui lòng chọn ít nhất 1 ly nước ép.");
@@ -518,7 +536,7 @@ export default function App() {
     }
   };
 
-  const sendOrderToZalo = async (event) => {
+  const submitOrder = async (event) => {
     event.preventDefault();
 
     if (!order.items.length) {
@@ -563,14 +581,20 @@ export default function App() {
 
     const message = `Mã đơn: ${orderId}\n\n${createOrderMessage()}`;
 
+    try {
+      await sendTelegramNotification(message);
+    } catch (error) {
+      console.error(error);
+      alert("Đơn đã lưu Firebase nhưng chưa gửi được thông báo Telegram.");
+    }
+
     const copiedOk = await copyTextFallback(message);
     setCopied(copiedOk);
 
     if (!copiedOk) {
-      alert("Đã lưu đơn nhưng trình duyệt không cho copy tự động. Zalo vẫn sẽ được mở.");
+      alert("Đã lưu đơn nhưng trình duyệt không cho copy tự động.");
     }
-    alert(`Đơn hàng đã được lưu. Mã đơn: ${orderId}`);
-    window.open(buildZaloUrl(PHONE_ZALO, message), "_blank", "noopener,noreferrer");
+    alert(`Đặt hàng thành công! Mã đơn: ${orderId}. Chủ quán sẽ liên hệ xác nhận sớm nhất.`);
     resetOrderForm();
   };
 
@@ -732,7 +756,7 @@ export default function App() {
 
         <section id="order" className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_.9fr]">
           <form
-            onSubmit={sendOrderToZalo}
+            onSubmit={submitOrder}
             className="rounded-[2rem] bg-white p-5 shadow-xl sm:p-8"
           >
             <h2 className="text-3xl font-black text-[#0b6b2b]">
@@ -740,9 +764,8 @@ export default function App() {
             </h2>
 
             <p className="mt-2 text-slate-600">
-              Sau khi bấm gửi, hệ thống sẽ copy nội dung đơn và mở Zalo của
-              quán. Nếu Zalo không tự điền nội dung, bạn chỉ cần dán tin nhắn
-              đã copy.
+              Sau khi đặt hàng, hệ thống sẽ lưu đơn và gửi thông báo cho chủ quán.
+              Chủ quán sẽ liên hệ xác nhận sớm nhất.
             </p>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -888,7 +911,7 @@ export default function App() {
               </div>
             )}
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={copyOrderMessage}
@@ -901,8 +924,16 @@ export default function App() {
                 type="submit"
                 className="rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black uppercase text-white shadow-lg transition hover:bg-orange-600"
               >
-                Gửi qua Zalo
+                Đặt hàng ngay
               </button>
+              <a
+                href={buildZaloUrl(PHONE_ZALO, "")}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl border-2 border-orange-500 px-6 py-4 text-center text-lg font-black uppercase text-orange-500 transition hover:bg-orange-50"
+              >
+                Chat Zalo
+              </a>
             </div>
           </form>
 
