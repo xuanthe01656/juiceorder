@@ -187,21 +187,44 @@ export default function App() {
       discountLabel = "Combo 3-5 ly giảm 5K";
     }
 
-    let shipping = DEFAULT_SHIPPING_FEE;
+    let shipping = 0;
     let shippingLabel = "Chưa chọn địa chỉ";
+
+    const distance = deliveryInfo.distanceKm;
 
     if (qtyTotal === 0) {
       shipping = 0;
       shippingLabel = "Chưa có đơn";
-    } else if (deliveryInfo.distanceKm === null) {
-      shipping = DEFAULT_SHIPPING_FEE;
-      shippingLabel = "Chưa xác định khoảng cách";
-    } else if (deliveryInfo.distanceKm <= FREE_SHIP_RADIUS_KM) {
+    }
+    else if (distance === null) {
       shipping = 0;
-      shippingLabel = `Free ship trong bán kính ${FREE_SHIP_RADIUS_KM}km`;
-    } else {
-      shipping = DEFAULT_SHIPPING_FEE;
-      shippingLabel = `Ngoài bán kính ${FREE_SHIP_RADIUS_KM}km`;
+      shippingLabel = "Chưa xác định khoảng cách";
+    }
+    else {
+
+      if (distance <= 3) {
+
+        if (qtyTotal >= 5) {
+          shipping = 0;
+          shippingLabel = `Free ship trong ${FREE_SHIP_RADIUS_KM}km cho đơn từ 5 ly`;
+        } else {
+          shipping = 3000;
+          shippingLabel = `Phí ship nội khu dưới 3km`;
+        }
+
+      }
+      else if (distance > 3 && distance <= 5) {
+
+        shipping = 10000;
+        shippingLabel = "Phí ship khu vực 3-5km";
+
+      }
+      else {
+
+        shipping = 20000;
+        shippingLabel = "Phí ship ngoài 5km";
+
+      }
     }
 
     const total = Math.max(0, subtotal - discount + shipping);
@@ -704,9 +727,9 @@ export default function App() {
                   }`}
                 >
                   Khoảng cách từ quán {SHOP_ADDRESS}: {deliveryInfo.distanceKm.toFixed(2)}km.
-                  {deliveryInfo.isFreeShip
+                  {order.shipping === 0
                     ? " Đơn này được miễn phí giao hàng."
-                    : ` Ngoài bán kính ${FREE_SHIP_RADIUS_KM}km, phí ship ${formatMoney(DEFAULT_SHIPPING_FEE)}.`}
+                    : ` Phí ship hiện tại: ${formatMoney(order.shipping)}.`}
                 </div>
               )}
             </div>
