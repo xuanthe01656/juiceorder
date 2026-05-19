@@ -1,4 +1,11 @@
 import React, { useMemo, useRef, useState } from "react";
+import {
+  addDoc,
+  collection,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { db } from "./firebase";
 
 import heroBanner from "./assets/images/hero_banner.png";
 import duaHauImg from "./assets/images/product_dua_hau.png";
@@ -94,6 +101,30 @@ const validatePhone = (phone) => {
 
 const buildZaloUrl = (phone, message) => {
   return `https://zalo.me/${phone}?text=${encodeURIComponent(message)}`;
+};
+const copyTextFallback = async (text) => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+
+    return ok;
+  } catch (error) {
+    console.error("Copy failed:", error);
+    return false;
+  }
 };
 const calculateDistanceKm = (from, to) => {
   const R = 6371;
@@ -265,6 +296,22 @@ export default function App() {
     setCart({});
     setCopied(false);
   };
+  const resetOrderForm = () => {
+    setCart({});
+    setForm(defaultForm);
+    setAddressKeyword("");
+    setAddressSuggestions([]);
+    setDeliveryInfo({
+      distanceKm: null,
+      isFreeShip: false,
+      selectedAddress: "",
+    });
+    setCopied(false);
+
+    setTimeout(() => {
+      addressInputRef.current?.focus();
+    }, 0);
+  };
 
   const updateForm = (field, value) => {
     setForm((prev) => ({
@@ -406,7 +453,54 @@ export default function App() {
         Đường: ${form.sugar}
         Đá: ${form.ice}
         Ghi chú: ${form.note.trim() || "Không có"}`;
-      };
+  };
+  const saveOrderToFirebase = async () => {
+    const orderData = {
+      customer: {
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+      },
+
+      items: order.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        qty: item.qty,
+        price: item.price,
+        total: item.qty * item.price,
+      })),
+
+      pricing: {
+        subtotal: order.subtotal,
+        discount: order.discount,
+        shipping: order.shipping,
+        total: order.total,
+      },
+
+      delivery: {
+        distanceKm: deliveryInfo.distanceKm,
+        isFreeShip: order.shipping === 0,
+      },
+
+      options: {
+        sugar: form.sugar,
+        ice: form.ice,
+      },
+
+      note: form.note,
+
+      createdAt: serverTimestamp(),
+
+      status: "pending",
+    };
+
+    const docRef = await addDoc(
+      collection(db, "orders"),
+      orderData
+    );
+
+    return docRef.id;
+  };
 
   const copyOrderMessage = async () => {
     if (!order.items.length) {
@@ -414,12 +508,13 @@ export default function App() {
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(createOrderMessage());
+    const copiedOk = await copyTextFallback(createOrderMessage());
+
+    if (copiedOk) {
       setCopied(true);
       alert("Đã copy nội dung đơn hàng.");
-    } catch (error) {
-      alert("Trình duyệt không cho copy tự động. Bạn hãy thử bấm gửi qua Zalo.");
+    } else {
+      alert("Không copy được tự động. Vui lòng thử lại trên HTTPS hoặc localhost.");
     }
   };
 
@@ -450,21 +545,33 @@ export default function App() {
       alert("Vui lòng nhập địa chỉ giao hàng.");
       return;
     }
+
     if (deliveryInfo.distanceKm === null) {
-      alert("Vui lòng bấm tìm và chọn địa chỉ từ danh sách để hệ thống tính khoảng cách giao hàng.");
+      alert("Vui lòng bấm tìm/chọn địa chỉ hoặc dùng GPS để tính khoảng cách giao hàng.");
       return;
     }
 
-    const message = createOrderMessage();
+    let orderId = "";
 
     try {
-      await navigator.clipboard.writeText(message);
-      setCopied(true);
+      orderId = await saveOrderToFirebase();
     } catch (error) {
-      setCopied(false);
+      console.error(error);
+      alert("Không thể lưu đơn hàng lên Firebase. Vui lòng thử lại.");
+      return;
     }
 
+    const message = `Mã đơn: ${orderId}\n\n${createOrderMessage()}`;
+
+    const copiedOk = await copyTextFallback(message);
+    setCopied(copiedOk);
+
+    if (!copiedOk) {
+      alert("Đã lưu đơn nhưng trình duyệt không cho copy tự động. Zalo vẫn sẽ được mở.");
+    }
+    alert(`Đơn hàng đã được lưu. Mã đơn: ${orderId}`);
     window.open(buildZaloUrl(PHONE_ZALO, message), "_blank", "noopener,noreferrer");
+    resetOrderForm();
   };
 
   return (
