@@ -31,8 +31,8 @@ import comboHealthyImg from "./assets/images/combo_healthy.png";
 const PHONE_ZALO = "0332420710";
 const SHOP_ADDRESS = "317 Âu Cơ, Hòa Khánh Bắc, Liên Chiểu, Đà Nẵng";
 const SHOP_LOCATION = {
-  lat: 16.0770582,
-  lon: 108.1369375,
+  lat: 16.07138453937811,
+  lon: 108.13489027618634,
 };
 
 const FREE_SHIP_RADIUS_KM = 3;
