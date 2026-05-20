@@ -101,7 +101,7 @@ const products = [
     id: "rauma",
     name: "Rau Má",
     price: 15000,
-    desc: "Thanh mát, giải nhiệt, tốt cho sức khỏe",
+    desc: "Tươi mát, thanh nhiệt, giải độc cơ thể",
     image: rauMaImg,
   },
   {
@@ -122,14 +122,14 @@ const products = [
     id: "cafe3",
     name: "Cafe Sữa",
     price: 12000,
-    desc: "Hài hòa, thơm béo, ngon khó cưỡng",
+    desc: "Hài hòa, béo ngậy, thơm ngon khó cưỡng",
     image: cafeSuaImg,
   },
   {
     id: "cafe4",
     name: "Bạc Xỉu",
     price: 15000,
-    desc: "Thanh mát, tự nhiên, giàu khoáng chất",
+    desc: "Thơm béo, ngọt dịu, hài hòa khó cưỡng",
     image: bacXiuImg,
   },
 ];
