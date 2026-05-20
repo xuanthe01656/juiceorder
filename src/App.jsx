@@ -19,6 +19,11 @@ import caRotImg from "./assets/images/product_ca_rot.png";
 import taoImg from "./assets/images/product_tao.png";
 import camImg from "./assets/images/product_cam.png";
 import miaImg from "./assets/images/product_mia.png";
+import rauMaImg from "./assets/images/product_rau_ma.png";
+import cafeMuoiImg from "./assets/images/product_cafe_muoi.png";
+import cafeDenImg from "./assets/images/product_cafe_den.png";
+import cafeSuaImg from "./assets/images/product_cafe_sua.png";
+import bacXiuImg from "./assets/images/product_bac_xiu.png";
 import freeShipImg from "./assets/images/free_ship.png";
 import comboTietKiemImg from "./assets/images/combo_tiet_kiem.png";
 import comboHealthyImg from "./assets/images/combo_healthy.png";
@@ -91,6 +96,41 @@ const products = [
     price: 12000,
     desc: "Thanh mát, tự nhiên, giàu khoáng chất",
     image: miaImg,
+  },
+  {
+    id: "rauma",
+    name: "Rau Má",
+    price: 15000,
+    desc: "Thanh mát, giải nhiệt, tốt cho sức khỏe",
+    image: rauMaImg,
+  },
+  {
+    id: "cafe1",
+    name: "Cafe Muối",
+    price: 17000,
+    desc: "Hương vị độc đáo, đậm đà, báo mặn hài hòa",
+    image: cafeMuoiImg,
+  },
+  {
+    id: "cafe2",
+    name: "Cafe Đen",
+    price: 12000,
+    desc: "Đậm đà, thơm nồng, tỉnh táo tức thì",
+    image: cafeDenImg,
+  },
+  {
+    id: "cafe3",
+    name: "Cafe Sữa",
+    price: 12000,
+    desc: "Hài hòa, thơm béo, ngon khó cưỡng",
+    image: cafeSuaImg,
+  },
+  {
+    id: "cafe4",
+    name: "Bạc Xỉu",
+    price: 15000,
+    desc: "Thanh mát, tự nhiên, giàu khoáng chất",
+    image: bacXiuImg,
   },
 ];
 
