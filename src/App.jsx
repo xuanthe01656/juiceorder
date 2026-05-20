@@ -18,6 +18,7 @@ import oiImg from "./assets/images/product_oi.png";
 import caRotImg from "./assets/images/product_ca_rot.png";
 import taoImg from "./assets/images/product_tao.png";
 import camImg from "./assets/images/product_cam.png";
+import miaImg from "./assets/images/product_mia.png";
 import freeShipImg from "./assets/images/free_ship.png";
 import comboTietKiemImg from "./assets/images/combo_tiet_kiem.png";
 import comboHealthyImg from "./assets/images/combo_healthy.png";
@@ -80,9 +81,16 @@ const products = [
   {
     id: "cam",
     name: "Cam",
-    price: 12000,
+    price: 15000,
     desc: "Giàu vitamin C, tăng cường miễn dịch",
     image: camImg,
+  },
+  {
+    id: "mia",
+    name: "Mía",
+    price: 12000,
+    desc: "Giàu vitamin C, tăng cường miễn dịch",
+    image: miaImg,
   },
 ];
 
