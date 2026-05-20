@@ -59,7 +59,9 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const previousOrderIdsRef = useRef(new Set());
-
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [updatingOrderId, setUpdatingOrderId] = useState("");
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -129,21 +131,23 @@ export default function AdminOrders() {
 
   const login = async (event) => {
     event.preventDefault();
+    if (loginLoading) return;
+    setLoginLoading(true);
 
     try {
-      await signInWithEmailAndPassword(
-        auth,
-        loginForm.email,
-        loginForm.password
-      );
+    await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
     } catch (error) {
-      console.error(error);
-      alert("Đăng nhập thất bại. Kiểm tra email/mật khẩu.");
+    console.error(error);
+    alert("Đăng nhập thất bại. Kiểm tra email/mật khẩu.");
+    } finally {
+    setLoginLoading(false);
     }
   };
 
   const updateOrderStatus = async (orderId, status) => {
+    if (updatingOrderId) return;
     try {
+      setUpdatingOrderId(orderId);
       await updateDoc(doc(db, "orders", orderId), {
         status,
         updatedAtMillis: Date.now(),
@@ -151,6 +155,8 @@ export default function AdminOrders() {
     } catch (error) {
       console.error(error);
       alert("Không thể cập nhật trạng thái.");
+    } finally {
+      setUpdatingOrderId("");
     }
   };
 
@@ -224,10 +230,11 @@ export default function AdminOrders() {
             />
 
             <button
-              type="submit"
-              className="w-full rounded-2xl bg-orange-500 px-6 py-4 font-black uppercase text-white shadow-lg hover:bg-orange-600"
-            >
-              Đăng nhập
+                type="submit"
+                disabled={loginLoading}
+                className="w-full rounded-2xl bg-orange-500 px-6 py-4 font-black uppercase text-white shadow-lg hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                {loginLoading ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
           </div>
         </form>
@@ -259,11 +266,20 @@ export default function AdminOrders() {
             </button>
 
             <button
-              type="button"
-              onClick={() => signOut(auth)}
-              className="rounded-2xl bg-orange-500 px-5 py-3 font-black text-white"
-            >
-              Đăng xuất
+                type="button"
+                disabled={logoutLoading}
+                onClick={async () => {
+                    if (logoutLoading) return;
+                    setLogoutLoading(true);
+                    try {
+                    await signOut(auth);
+                    } finally {
+                    setLogoutLoading(false);
+                    }
+                }}
+                className="rounded-2xl bg-orange-500 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                {logoutLoading ? "Đang thoát..." : "Đăng xuất"}
             </button>
           </div>
         </div>
@@ -337,33 +353,33 @@ export default function AdminOrders() {
                       {["pending", "confirmed", "delivering", "completed"].map(
                         (status) => (
                           <button
+                            disabled={updatingOrderId === order.id}
                             key={status}
                             type="button"
                             onClick={() => updateOrderStatus(order.id, status)}
-                            className={`rounded-xl px-3 py-2 text-sm font-black ${
+                            className={`rounded-xl px-3 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60 ${
                               order.status === status
                                 ? "bg-[#0b6b2b] text-white"
                                 : "bg-white text-slate-600"
                             }`}
                           >
-                            {statusText[status]}
+                            {updatingOrderId === order.id ? "Đang lưu..." : statusText[status]}
                           </button>
                         )
                       )}
 
-                      <button
+                    <button
                         type="button"
-                        onClick={() =>
-                          updateOrderStatus(order.id, "cancelled")
-                        }
-                        className={`rounded-xl px-3 py-2 text-sm font-black ${
-                          order.status === "cancelled"
+                        disabled={updatingOrderId === order.id}
+                        onClick={() => updateOrderStatus(order.id, "cancelled")}
+                        className={`rounded-xl px-3 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60 ${
+                            order.status === "cancelled"
                             ? "bg-red-500 text-white"
                             : "bg-white text-red-500"
                         }`}
-                      >
-                        Hủy
-                      </button>
+                        >
+                        {updatingOrderId === order.id ? "Đang lưu..." : "Hủy"}
+                    </button>
 
                       <button
                         type="button"

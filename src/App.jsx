@@ -182,6 +182,8 @@ export default function App() {
     distanceKm: null,
     isFreeShip: false,
   });
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const [orderSearchCode, setOrderSearchCode] = useState(
     () => localStorage.getItem(ORDER_SEARCH_KEY) || ""
   );
@@ -597,6 +599,7 @@ export default function App() {
   };
   
   const cancelOrder = async () => {
+    if (cancelLoading) return;
     if (!searchedOrder) return;
   
     if (searchedOrder.status === "cancelled") {
@@ -610,8 +613,9 @@ export default function App() {
     }
   
     const confirmCancel = window.confirm("Bạn chắc chắn muốn hủy đơn này?");
-  
     if (!confirmCancel) return;
+  
+    setCancelLoading(true);
   
     try {
       const orderRef = doc(db, "orders", searchedOrder.id);
@@ -632,70 +636,76 @@ export default function App() {
     } catch (error) {
       console.error(error);
       alert("Không thể hủy đơn lúc này.");
+    } finally {
+      setCancelLoading(false);
     }
   };
 
   const submitOrder = async (event) => {
     event.preventDefault();
-
+  
+    if (submitLoading) return;
+  
     if (!order.items.length) {
       alert("Vui lòng chọn ít nhất 1 ly nước ép.");
       return;
     }
-
+  
     if (!form.name.trim()) {
       alert("Vui lòng nhập họ tên.");
       return;
     }
-
+  
     if (!form.phone.trim()) {
       alert("Vui lòng nhập số điện thoại.");
       return;
     }
-
+  
     if (!validatePhone(form.phone)) {
       alert("Số điện thoại chưa đúng định dạng. Ví dụ: 0332420710 hoặc +84332420710");
       return;
     }
-
+  
     if (!form.address.trim()) {
       alert("Vui lòng nhập địa chỉ giao hàng.");
       return;
     }
-
+  
     if (deliveryInfo.distanceKm === null) {
       alert("Vui lòng bấm tìm/chọn địa chỉ hoặc dùng GPS để tính khoảng cách giao hàng.");
       return;
     }
-
-    let orderId = "";
-
+  
+    setSubmitLoading(true);
+  
     try {
-      orderId = await saveOrderToFirebase();
+      const orderId = await saveOrderToFirebase();
       saveOrderIdToStorage(orderId);
+  
+      const message = `Mã đơn: ${orderId}\n\n${createOrderMessage()}`;
+  
+      try {
+        await sendTelegramNotification(message);
+      } catch (error) {
+        console.error(error);
+        alert("Đơn đã lưu Firebase nhưng chưa gửi được thông báo Telegram.");
+      }
+  
+      const copiedOk = await copyTextFallback(message);
+      setCopied(copiedOk);
+  
+      if (!copiedOk) {
+        alert("Đã lưu đơn nhưng trình duyệt không cho copy tự động.");
+      }
+  
+      alert(`Đặt hàng thành công! Mã đơn: ${orderId}. Chủ quán sẽ liên hệ xác nhận sớm nhất.`);
+      resetOrderForm();
     } catch (error) {
       console.error(error);
       alert("Không thể lưu đơn hàng lên Firebase. Vui lòng thử lại.");
-      return;
+    } finally {
+      setSubmitLoading(false);
     }
-
-    const message = `Mã đơn: ${orderId}\n\n${createOrderMessage()}`;
-
-    try {
-      await sendTelegramNotification(message);
-    } catch (error) {
-      console.error(error);
-      alert("Đơn đã lưu Firebase nhưng chưa gửi được thông báo Telegram.");
-    }
-
-    const copiedOk = await copyTextFallback(message);
-    setCopied(copiedOk);
-
-    if (!copiedOk) {
-      alert("Đã lưu đơn nhưng trình duyệt không cho copy tự động.");
-    }
-    alert(`Đặt hàng thành công! Mã đơn: ${orderId}. Chủ quán sẽ liên hệ xác nhận sớm nhất.`);
-    resetOrderForm();
   };
 
   return (
@@ -1090,9 +1100,10 @@ export default function App() {
 
               <button
                 type="submit"
-                className="rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black uppercase text-white shadow-lg transition hover:bg-orange-600"
+                disabled={submitLoading}
+                className="rounded-2xl bg-orange-500 px-6 py-4 text-lg font-black uppercase text-white shadow-lg transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Đặt hàng ngay
+                {submitLoading ? "Đang đặt..." : "Đặt hàng ngay"}
               </button>
               <a
                 href={buildZaloUrl(PHONE_ZALO, "")}
@@ -1299,21 +1310,24 @@ export default function App() {
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={cancelOrder}
-                disabled={
-                  searchedOrder.status === "cancelled" ||
-                  !canCancelOrder(searchedOrder)
-                }
-                className="rounded-2xl bg-red-500 px-6 py-4 font-black uppercase text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                {searchedOrder.status === "cancelled"
-                  ? "Đơn đã hủy"
-                  : canCancelOrder(searchedOrder)
-                  ? "Hủy đơn"
-                  : "Quá 5 phút"}
-              </button>
+            <button
+              type="button"
+              onClick={cancelOrder}
+              disabled={
+                cancelLoading ||
+                searchedOrder.status === "cancelled" ||
+                !canCancelOrder(searchedOrder)
+              }
+              className="rounded-2xl bg-red-500 px-6 py-4 font-black uppercase text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {cancelLoading
+                ? "Đang hủy..."
+                : searchedOrder.status === "cancelled"
+                ? "Đơn đã hủy"
+                : canCancelOrder(searchedOrder)
+                ? "Hủy đơn"
+                : "Quá 5 phút"}
+            </button>
 
               <a
                 href={buildZaloUrl(PHONE_ZALO, `Mình cần hỗ trợ đơn ${searchedOrder.id}`)}
