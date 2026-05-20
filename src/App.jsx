@@ -2,7 +2,10 @@ import React, { useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
+  doc,
+  getDoc,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "./firebase";
@@ -27,7 +30,9 @@ const SHOP_LOCATION = {
 };
 
 const FREE_SHIP_RADIUS_KM = 3;
-const DEFAULT_SHIPPING_FEE = 10000;
+const ORDER_STORAGE_KEY = "nha_mit_order_ids";
+const ORDER_SEARCH_KEY = "nha_mit_last_order_search";
+const CANCEL_LIMIT_MS = 5 * 60 * 1000;
 
 const products = [
   {
@@ -176,8 +181,13 @@ export default function App() {
   const [deliveryInfo, setDeliveryInfo] = useState({
     distanceKm: null,
     isFreeShip: false,
-    selectedAddress: "",
   });
+  const [orderSearchCode, setOrderSearchCode] = useState(
+    () => localStorage.getItem(ORDER_SEARCH_KEY) || ""
+  );
+  const [searchedOrder, setSearchedOrder] = useState(null);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [orderSearchLoading, setOrderSearchLoading] = useState(false);
 
   const order = useMemo(() => {
     const items = products
@@ -286,7 +296,6 @@ export default function App() {
     setDeliveryInfo({
       distanceKm: null,
       isFreeShip: false,
-      selectedAddress: "",
     });
     setCopied(false);
 
@@ -343,7 +352,6 @@ export default function App() {
     setDeliveryInfo({
       distanceKm,
       isFreeShip: distanceKm <= FREE_SHIP_RADIUS_KM,
-      selectedAddress,
     });
 
     setAddressSuggestions([]);
@@ -378,7 +386,6 @@ export default function App() {
         setDeliveryInfo({
           distanceKm,
           isFreeShip: distanceKm <= FREE_SHIP_RADIUS_KM,
-          selectedAddress: form.address,
         });
 
         setTimeout(() => {
@@ -470,9 +477,8 @@ export default function App() {
       },
 
       note: form.note,
-
       createdAt: serverTimestamp(),
-
+      createdAtMillis: Date.now(),
       status: "pending",
     };
 
@@ -482,6 +488,37 @@ export default function App() {
     );
 
     return docRef.id;
+  };
+  const getStoredOrderIds = () => {
+    try {
+      return JSON.parse(localStorage.getItem(ORDER_STORAGE_KEY)) || [];
+    } catch {
+      return [];
+    }
+  };
+  
+  const saveOrderIdToStorage = (orderId) => {
+    const oldIds = getStoredOrderIds();
+  
+    const nextIds = [
+      orderId,
+      ...oldIds.filter((id) => id !== orderId),
+    ].slice(0, 20);
+  
+    localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(nextIds));
+    localStorage.setItem(ORDER_SEARCH_KEY, orderId);
+    setOrderSearchCode(orderId);
+  };
+  
+  const getOrderCreatedTime = (orderData) => {
+    if (orderData.createdAtMillis) return orderData.createdAtMillis;
+    if (orderData.createdAt?.toMillis) return orderData.createdAt.toMillis();
+    return Date.now();
+  };
+  
+  const canCancelOrder = (orderData) => {
+    const createdTime = getOrderCreatedTime(orderData);
+    return Date.now() - createdTime <= CANCEL_LIMIT_MS;
   };
   const sendTelegramNotification = async (message) => {
     const response = await fetch("/api/send-telegram", {
@@ -515,6 +552,86 @@ export default function App() {
       alert("Đã copy nội dung đơn hàng.");
     } else {
       alert("Không copy được tự động. Vui lòng thử lại trên HTTPS hoặc localhost.");
+    }
+  };
+  const searchOrderByCode = async () => {
+    const code = orderSearchCode.trim();
+  
+    if (!code) {
+      alert("Vui lòng nhập mã đơn.");
+      return;
+    }
+  
+    localStorage.setItem(ORDER_SEARCH_KEY, code);
+  
+    const storedIds = getStoredOrderIds();
+  
+    if (!storedIds.includes(code)) {
+      alert("Mã đơn này không được tạo trên thiết bị này.");
+      return;
+    }
+  
+    try {
+      setOrderSearchLoading(true);
+  
+      const orderRef = doc(db, "orders", code);
+      const snap = await getDoc(orderRef);
+  
+      if (!snap.exists()) {
+        alert("Không tìm thấy đơn hàng.");
+        return;
+      }
+  
+      setSearchedOrder({
+        id: snap.id,
+        ...snap.data(),
+      });
+  
+      setOrderModalOpen(true);
+    } catch (error) {
+      console.error(error);
+      alert("Không thể tìm đơn hàng lúc này.");
+    } finally {
+      setOrderSearchLoading(false);
+    }
+  };
+  
+  const cancelOrder = async () => {
+    if (!searchedOrder) return;
+  
+    if (searchedOrder.status === "cancelled") {
+      alert("Đơn này đã được hủy trước đó.");
+      return;
+    }
+  
+    if (!canCancelOrder(searchedOrder)) {
+      alert("Đơn đã quá 5 phút nên không thể hủy.");
+      return;
+    }
+  
+    const confirmCancel = window.confirm("Bạn chắc chắn muốn hủy đơn này?");
+  
+    if (!confirmCancel) return;
+  
+    try {
+      const orderRef = doc(db, "orders", searchedOrder.id);
+  
+      await updateDoc(orderRef, {
+        status: "cancelled",
+        cancelledAt: serverTimestamp(),
+        cancelledAtMillis: Date.now(),
+      });
+  
+      setSearchedOrder((prev) => ({
+        ...prev,
+        status: "cancelled",
+        cancelledAtMillis: Date.now(),
+      }));
+  
+      alert("Đã hủy đơn thành công.");
+    } catch (error) {
+      console.error(error);
+      alert("Không thể hủy đơn lúc này.");
     }
   };
 
@@ -555,6 +672,7 @@ export default function App() {
 
     try {
       orderId = await saveOrderToFirebase();
+      saveOrderIdToStorage(orderId);
     } catch (error) {
       console.error(error);
       alert("Không thể lưu đơn hàng lên Firebase. Vui lòng thử lại.");
@@ -635,23 +753,92 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 md:px-8">
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            ["Nguyên chất", "Không chất bảo quản"],
-            ["Không đường", "Theo yêu cầu từng món"],
-            ["Ép tươi", "Làm mới mỗi ngày"],
-            ["Tốt cho sức khỏe", "Giàu vitamin tự nhiên"],
-          ].map(([title, text]) => (
-            <div
-              key={title}
-              className="rounded-3xl border border-green-200 bg-white p-5 shadow-sm"
-            >
-              <b className="text-[#0b6b2b]">{title}</b>
-              <p className="mt-1 text-sm text-slate-600">{text}</p>
-            </div>
-          ))}
-        </section>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          {
+            icon: "🌿",
+            title: "Nguyên chất",
+            text: "Không chất bảo quản",
+            bg: "from-green-50 to-lime-100",
+          },
+          {
+            icon: "🍃",
+            title: "Không đường",
+            text: "Theo yêu cầu từng món",
+            bg: "from-emerald-50 to-green-100",
+          },
+          {
+            icon: "🥤",
+            title: "Ép tươi",
+            text: "Làm mới mỗi ngày",
+            bg: "from-orange-50 to-yellow-100",
+          },
+          {
+            icon: "💚",
+            title: "Tốt cho sức khỏe",
+            text: "Giàu vitamin tự nhiên",
+            bg: "from-lime-50 to-green-100",
+          },
+        ].map((item) => (
+          <div
+            key={item.title}
+            className={`group relative overflow-hidden rounded-[2rem] border border-green-200 bg-gradient-to-br ${item.bg} p-5 shadow-md transition duration-300 hover:-translate-y-1 hover:shadow-xl`}
+          >
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/50 blur-xl transition group-hover:scale-125" />
 
+            <div className="relative flex items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm ring-1 ring-green-100">
+                {item.icon}
+              </div>
+
+              <div>
+                <h3 className="text-lg font-black uppercase tracking-wide text-[#0b6b2b]">
+                  {item.title}
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  {item.text}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </section>
+      <section className="mt-8 rounded-[2rem] border border-green-200 bg-white p-5 shadow-lg sm:p-6">
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wide text-orange-500">
+              Theo dõi đơn hàng
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-[#0b6b2b]">
+              Tra cứu đơn đã đặt trên thiết bị này
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Nhập mã đơn để xem trạng thái. Bạn có thể hủy đơn trong vòng 5 phút sau khi đặt.
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input
+              value={orderSearchCode}
+              onChange={(event) => {
+                setOrderSearchCode(event.target.value);
+                localStorage.setItem(ORDER_SEARCH_KEY, event.target.value);
+              }}
+              className="w-full rounded-2xl border border-green-200 px-4 py-3 font-bold outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100 sm:min-w-80"
+              placeholder="Nhập mã đơn ..."
+            />
+
+            <button
+              type="button"
+              onClick={searchOrderByCode}
+              disabled={orderSearchLoading}
+              className="rounded-2xl bg-[#0b6b2b] px-6 py-3 font-black uppercase text-white shadow-lg transition hover:bg-green-800 disabled:opacity-60"
+            >
+              {orderSearchLoading ? "Đang tìm..." : "Tìm đơn"}
+            </button>
+          </div>
+        </div>
+      </section>
         <section className="mt-10">
           <div className="mb-6 text-center">
             <h2 className="inline-block rounded-2xl bg-[#0b6b2b] px-8 py-3 text-3xl font-black uppercase text-white shadow-lg">
@@ -789,7 +976,6 @@ export default function App() {
                     setDeliveryInfo({
                       distanceKm: null,
                       isFreeShip: false,
-                      selectedAddress: "",
                     });
                   }}
                   required
@@ -1017,6 +1203,130 @@ export default function App() {
         <p className="mt-2">Âu Cơ - Đà Nẵng | SDT/Zalo: {PHONE_ZALO}</p>
         <p className="mt-2 italic">Cảm ơn bạn đã ủng hộ nước ép nhà Mit!</p>
       </footer>
+      {orderModalOpen && searchedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white p-5 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4 border-b pb-4">
+              <div>
+                <p className="text-sm font-bold uppercase text-orange-500">
+                  Chi tiết đơn hàng
+                </p>
+                <h3 className="mt-1 text-2xl font-black text-[#0b6b2b]">
+                  Mã đơn: {searchedOrder.id}
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  Trạng thái:{" "}
+                  <span
+                    className={
+                      searchedOrder.status === "cancelled"
+                        ? "text-red-500"
+                        : "text-[#0b6b2b]"
+                    }
+                  >
+                    {searchedOrder.status || "pending"}
+                  </span>
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setOrderModalOpen(false)}
+                className="rounded-full bg-slate-100 px-4 py-2 font-black text-slate-600 hover:bg-slate-200"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl bg-green-50 p-4">
+                <p className="text-sm font-bold text-slate-500">Khách hàng</p>
+                <p className="mt-1 font-black text-[#0b6b2b]">
+                  {searchedOrder.customer?.name}
+                </p>
+                <p className="text-sm">{searchedOrder.customer?.phone}</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {searchedOrder.customer?.address}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-orange-50 p-4">
+                <p className="text-sm font-bold text-slate-500">Thanh toán</p>
+                <p className="mt-1 text-sm">
+                  Tạm tính: {formatMoney(searchedOrder.pricing?.subtotal)}
+                </p>
+                <p className="text-sm">
+                  Ưu đãi: -{formatMoney(searchedOrder.pricing?.discount)}
+                </p>
+                <p className="text-sm">
+                  Ship:{" "}
+                  {searchedOrder.pricing?.shipping === 0
+                    ? "Free"
+                    : formatMoney(searchedOrder.pricing?.shipping)}
+                </p>
+                <p className="mt-2 text-xl font-black text-orange-500">
+                  Tổng: {formatMoney(searchedOrder.pricing?.total)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {(searchedOrder.items || []).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"
+                >
+                  <div>
+                    <b>{item.name}</b>
+                    <p className="text-sm text-slate-500">
+                      {item.qty} ly x {formatMoney(item.price)}
+                    </p>
+                  </div>
+                  <b>{formatMoney(item.total)}</b>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-dashed border-green-300 p-4 text-sm text-slate-600">
+              <p>
+                Đường: <b>{searchedOrder.options?.sugar}</b>
+              </p>
+              <p>
+                Đá: <b>{searchedOrder.options?.ice}</b>
+              </p>
+              <p>
+                Ghi chú: <b>{searchedOrder.note || "Không có"}</b>
+              </p>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={cancelOrder}
+                disabled={
+                  searchedOrder.status === "cancelled" ||
+                  !canCancelOrder(searchedOrder)
+                }
+                className="rounded-2xl bg-red-500 px-6 py-4 font-black uppercase text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {searchedOrder.status === "cancelled"
+                  ? "Đơn đã hủy"
+                  : canCancelOrder(searchedOrder)
+                  ? "Hủy đơn"
+                  : "Quá 5 phút"}
+              </button>
+
+              <a
+                href={buildZaloUrl(PHONE_ZALO, `Mình cần hỗ trợ đơn ${searchedOrder.id}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl border-2 border-orange-500 px-6 py-4 text-center font-black uppercase text-orange-500 transition hover:bg-orange-50"
+              >
+                Chat Zalo hỗ trợ
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
