@@ -197,23 +197,18 @@ export default function App() {
     let discountLabel = "Chưa áp dụng";
 
     if (qtyTotal >= 6) {
-      // Sắp xếp giá tăng dần
-      const sortedPrices = items
+      const allPrices = items
         .flatMap((item) => Array(item.qty).fill(item.price))
         .sort((a, b) => a - b);
-      const first6 = sortedPrices.slice(0, 6);
-      // Ly còn lại
-      const remaining = sortedPrices.slice(6);
+      const first6 = allPrices.slice(0, 6);
+      const remaining = allPrices.slice(6);
       const first6Original = first6.reduce((sum, price) => sum + price, 0);
-      // Discount = giá gốc 6 ly - 79k
-      const comboDiscount = Math.max(0, first6Original - 79000);
-      discount = comboDiscount;
+      discount = Math.max(0, first6Original - 79000);
       discountLabel =
         qtyTotal === 6
           ? "Combo healthy 6 ly = 79K"
           : `Combo healthy 6 ly = 79K + ${remaining.length} ly tính thêm`;
-
-    } else if (qtyTotal >= 3) {
+    } else if (qtyTotal >= 3 && qtyTotal <= 5) {
       discount = 5000;
       discountLabel = "Combo 3-5 ly giảm 5K";
     }
@@ -226,36 +221,23 @@ export default function App() {
     if (qtyTotal === 0) {
       shipping = 0;
       shippingLabel = "Chưa có đơn";
-    }
-    else if (distance === null) {
+    } else if (distance === null) {
       shipping = 0;
       shippingLabel = "Chưa xác định khoảng cách";
-    }
-    else {
-
-      if (distance <= 3) {
-
-        if (qtyTotal >= 5) {
-          shipping = 0;
-          shippingLabel = `Free ship trong ${FREE_SHIP_RADIUS_KM}km cho đơn từ 5 ly`;
-        } else {
-          shipping = 3000;
-          shippingLabel = `Phí ship nội khu dưới 3km`;
-        }
-
+    } else if (distance <= 3) {
+      if (qtyTotal >= 5) {
+        shipping = 0;
+        shippingLabel = `Free ship trong ${FREE_SHIP_RADIUS_KM}km cho đơn từ 5 ly`;
+      } else {
+        shipping = 3000;
+        shippingLabel = "Phí ship nội khu dưới 3km";
       }
-      else if (distance > 3 && distance <= 5) {
-
-        shipping = 10000;
-        shippingLabel = "Phí ship khu vực 3-5km";
-
-      }
-      else {
-
-        shipping = 20000;
-        shippingLabel = "Phí ship ngoài 5km";
-
-      }
+    } else if (distance > 3 && distance <= 5) {
+      shipping = 10000;
+      shippingLabel = "Phí ship khu vực 3-5km";
+    } else {
+      shipping = 20000;
+      shippingLabel = "Phí ship ngoài 5km";
     }
 
     const total = Math.max(0, subtotal - discount + shipping);
