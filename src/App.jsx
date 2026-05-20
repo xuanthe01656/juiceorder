@@ -89,7 +89,7 @@ const products = [
     id: "mia",
     name: "Mía",
     price: 12000,
-    desc: "Giàu vitamin C, tăng cường miễn dịch",
+    desc: "Thanh mát, tự nhiên, giàu khoáng chất",
     image: miaImg,
   },
 ];
