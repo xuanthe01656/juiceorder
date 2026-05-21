@@ -527,7 +527,20 @@ export default function App() {
   };
   const getStoredOrderIds = () => {
     try {
-      return JSON.parse(localStorage.getItem(ORDER_STORAGE_KEY)) || [];
+      const raw = JSON.parse(localStorage.getItem(ORDER_STORAGE_KEY)) || [];
+  
+      return raw
+        .map((item) => {
+          if (typeof item === "string") {
+            return {
+              orderId: item,
+              cancelToken: "",
+            };
+          }
+  
+          return item;
+        })
+        .filter((item) => item?.orderId);
     } catch {
       return [];
     }
@@ -604,7 +617,9 @@ export default function App() {
     localStorage.setItem(ORDER_SEARCH_KEY, code);
   
     const storedIds = getStoredOrderIds();
-    const storedOrder = storedIds.find((item) => item.orderId === code);
+    const storedOrder = storedIds.find(
+      (item) => item.orderId?.trim() === code
+    );
     if (!storedOrder) {
       alert("Mã đơn này không được tạo trên thiết bị này.");
       return;
@@ -1302,7 +1317,10 @@ export default function App() {
 
               <button
                 type="button"
-                onClick={() => setOrderModalOpen(false)}
+                onClick={() => {
+                  setOrderModalOpen(false);
+                  setSearchedOrder(null);
+                }}
                 className="rounded-full bg-slate-100 px-4 py-2 font-black text-slate-600 hover:bg-slate-200"
               >
                 ×
