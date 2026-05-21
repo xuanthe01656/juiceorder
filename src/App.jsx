@@ -44,99 +44,7 @@ const ORDER_STORAGE_KEY = "nha_mit_order_ids";
 const ORDER_SEARCH_KEY = "nha_mit_last_order_search";
 const CANCEL_LIMIT_MS = 5 * 60 * 1000;
 
-const defaultProducts = [
-  {
-    id: "dua-hau",
-    name: "Dưa hấu",
-    price: 12000,
-    desc: "Thơm mát, giải nhiệt, giàu vitamin",
-    image: duaHauImg,
-  },
-  {
-    id: "ca-chua",
-    name: "Cà chua",
-    price: 12000,
-    desc: "Giàu lycopene, tốt cho tim mạch, đẹp da",
-    image: caChuaImg,
-  },
-  {
-    id: "thom",
-    name: "Thơm",
-    price: 15000,
-    desc: "Giàu vitamin C, hỗ trợ tiêu hóa",
-    image: thomImg,
-  },
-  {
-    id: "oi",
-    name: "Ổi",
-    price: 15000,
-    desc: "Giàu vitamin C, tăng sức đề kháng",
-    image: oiImg,
-  },
-  {
-    id: "ca-rot",
-    name: "Cà rốt",
-    price: 15000,
-    desc: "Tốt cho mắt, đẹp da, tăng đề kháng",
-    image: caRotImg,
-  },
-  {
-    id: "tao",
-    name: "Táo",
-    price: 18000,
-    desc: "Giàu chất chống oxy hóa, tốt cho tim mạch",
-    image: taoImg,
-  },
-  {
-    id: "cam",
-    name: "Cam",
-    price: 15000,
-    desc: "Giàu vitamin C, tăng cường miễn dịch",
-    image: camImg,
-  },
-  {
-    id: "mia",
-    name: "Mía",
-    price: 12000,
-    desc: "Thanh mát, tự nhiên, giàu khoáng chất",
-    image: miaImg,
-  },
-  {
-    id: "rauma",
-    name: "Rau Má",
-    price: 15000,
-    desc: "Tươi mát, thanh nhiệt, giải độc cơ thể",
-    image: rauMaImg,
-  },
-  {
-    id: "cafe1",
-    name: "Cafe Muối",
-    price: 17000,
-    desc: "Hương vị độc đáo, đậm đà, báo mặn hài hòa",
-    image: cafeMuoiImg,
-  },
-  {
-    id: "cafe2",
-    name: "Cafe Đen",
-    price: 12000,
-    desc: "Đậm đà, thơm nồng, tỉnh táo tức thì",
-    image: cafeDenImg,
-  },
-  {
-    id: "cafe3",
-    name: "Cafe Sữa",
-    price: 12000,
-    desc: "Hài hòa, béo ngậy, thơm ngon khó cưỡng",
-    image: cafeSuaImg,
-  },
-  {
-    id: "cafe4",
-    name: "Bạc Xỉu",
-    price: 15000,
-    desc: "Thơm béo, ngọt dịu, hài hòa khó cưỡng",
-    image: bacXiuImg,
-  },
-];
+
 const productImages = {
   "dua-hau": duaHauImg,
   "ca-chua": caChuaImg,
@@ -257,7 +165,7 @@ export default function App() {
   const [searchedOrder, setSearchedOrder] = useState(null);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [orderSearchLoading, setOrderSearchLoading] = useState(false);
-  const [products, setProducts] = useState(defaultProducts);
+  const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
 
   const order = useMemo(() => {
@@ -348,7 +256,7 @@ export default function App() {
         const snap = await getDocs(q);
   
         if (snap.empty) {
-          setProducts(defaultProducts);
+          setProducts([]);
           return;
         }
   
@@ -369,7 +277,7 @@ export default function App() {
         setProducts(list);
       } catch (error) {
         console.error(error);
-        setProducts(defaultProducts);
+        setProducts([]);
       } finally {
         setProductsLoading(false);
       }
@@ -471,7 +379,7 @@ export default function App() {
 
     setDeliveryInfo({
       distanceKm,
-      isFreeShip: distanceKm <= FREE_SHIP_RADIUS_KM,
+      isFreeShip: false,
     });
 
     setAddressSuggestions([]);
@@ -505,7 +413,7 @@ export default function App() {
 
         setDeliveryInfo({
           distanceKm,
-          isFreeShip: distanceKm <= FREE_SHIP_RADIUS_KM,
+          isFreeShip: false,
         });
 
         setTimeout(() => {
@@ -990,7 +898,14 @@ export default function App() {
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {products.map((product) => (
+          {productsLoading ? (
+            <div className="col-span-full rounded-3xl bg-white p-8 text-center shadow">
+              <h3 className="text-2xl font-black text-[#0b6b2b]">
+                Đang tải menu...
+              </h3>
+            </div>
+          ) : products.length ? (
+            products.map((product) => (
               <article
                 key={product.id}
                 className="overflow-hidden rounded-[2rem] bg-white shadow-lg transition hover:-translate-y-1 hover:shadow-xl"
@@ -1018,6 +933,11 @@ export default function App() {
                   </div>
 
                   <div className="mt-4 flex items-center justify-center gap-2">
+                    {product.inStock === false && (
+                      <div className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-500">
+                        Hết hàng
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={() => changeQty(product.id, -1)}
@@ -1034,19 +954,25 @@ export default function App() {
                       type="button"
                       disabled={product.inStock === false}
                       onClick={() => changeQty(product.id, 1)}
-                      className="h-10 w-10 rounded-full bg-[#0b6b2b] text-xl font-black text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                      className="h-10 w-10 rounded-full bg-[#0b6b2b] text-xl font-black text-white transition enabled:hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
                       +
                     </button>
                   </div>
                 </div>
-                {product.inStock === false && (
-                  <div className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-500">
-                    Hết hàng
-                  </div>
-                )}
+                
               </article>
-            ))}
+            ))
+            ) : (
+              <div className="col-span-full rounded-3xl bg-white p-8 text-center shadow">
+                <h3 className="text-2xl font-black text-[#0b6b2b]">
+                  Chưa có sản phẩm
+                </h3>
+                <p className="mt-2 text-slate-500">
+                  Chủ shop chưa cập nhật menu.
+                </p>
+              </div>
+            )}
           </div>
         </section>
 
@@ -1164,7 +1090,7 @@ export default function App() {
               {deliveryInfo.distanceKm !== null && (
                 <div
                   className={`mt-3 rounded-2xl p-4 text-sm font-bold ${
-                    deliveryInfo.isFreeShip
+                    order.shipping === 0
                       ? "bg-green-50 text-[#0b6b2b]"
                       : "bg-orange-50 text-orange-600"
                   }`}

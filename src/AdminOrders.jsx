@@ -76,7 +76,6 @@ export default function AdminOrders() {
   });
   const [productsLoading, setProductsLoading] = useState(false);
   const [updatingProductId, setUpdatingProductId] = useState("");
-  
   const saveProduct = async (event) => {
     event.preventDefault();
   
@@ -534,6 +533,11 @@ export default function AdminOrders() {
                   </div>
                 </div>
               ))}
+              {!products.length && (
+                <div className="col-span-full rounded-2xl bg-slate-50 p-6 text-center text-slate-500">
+                  Chưa có sản phẩm nào.
+                </div>
+              )}
             </div>
           )}
         </section>
