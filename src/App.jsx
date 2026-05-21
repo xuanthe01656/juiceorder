@@ -124,17 +124,16 @@ const calculateDistanceKm = (from, to) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const searchAddressApi = async (keyword) => {
-  const query = `${keyword}, Đà Nẵng, Việt Nam`;
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+const searchAddressApi = async (keyword) => {
+  const address = `${keyword}, Đà Nẵng, Việt Nam`;
   const url =
-    `https://nominatim.openstreetmap.org/search` +
-    `?format=jsonv2` +
-    `&addressdetails=1` +
-    `&limit=5` +
-    `&countrycodes=vn` +
-    `&accept-language=vi` +
-    `&q=${encodeURIComponent(query)}`;
+    `https://maps.googleapis.com/maps/api/geocode/json` +
+    `?address=${encodeURIComponent(address)}` +
+    `&components=country:VN|administrative_area:Đà Nẵng` +
+    `&language=vi` +
+    `&key=${GOOGLE_MAPS_API_KEY}`;
 
   const response = await fetch(url);
 
@@ -142,9 +141,19 @@ const searchAddressApi = async (keyword) => {
     throw new Error("Không thể tìm địa chỉ");
   }
 
-  return response.json();
-};
+  const data = await response.json();
 
+  if (data.status !== "OK") {
+    return [];
+  }
+
+  return data.results.map((item) => ({
+    place_id: item.place_id,
+    display_name: item.formatted_address,
+    lat: item.geometry.location.lat,
+    lon: item.geometry.location.lng,
+  }));
+};
 export default function App() {
   const [cart, setCart] = useState({});
   const [form, setForm] = useState(defaultForm);
