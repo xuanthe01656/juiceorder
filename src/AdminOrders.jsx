@@ -8,6 +8,7 @@ import {
   updateDoc,
   setDoc,
 } from "firebase/firestore";
+import orderBellSound from "./assets/sounds/old-phone-bell.mp3";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -60,6 +61,7 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const previousOrderIdsRef = useRef(new Set());
+  const notifyAudioRef = useRef(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState("");
@@ -231,25 +233,12 @@ export default function AdminOrders() {
       setUpdatingProductId("");
     }
   };
-  const playNotifySound = () => {
+  const playNotifySound = async () => {
     try {
-      const audioContext = new AudioContext();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.frequency.value = 880;
-      oscillator.type = "sine";
-
-      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-      oscillator.start();
-
-      setTimeout(() => {
-        oscillator.stop();
-        audioContext.close();
-      }, 500);
+      if (!notifyAudioRef.current) return;
+  
+      notifyAudioRef.current.currentTime = 0;
+      await notifyAudioRef.current.play();
     } catch (error) {
       console.error(error);
     }
@@ -370,6 +359,11 @@ export default function AdminOrders() {
 
   return (
     <div className="min-h-screen bg-[#fff7df] text-slate-900">
+      <audio
+        ref={notifyAudioRef}
+        src={orderBellSound}
+        preload="auto"
+      />
       <header className="bg-[#0b6b2b] px-4 py-6 text-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
