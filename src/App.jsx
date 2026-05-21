@@ -1,11 +1,15 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react"; 
 import {
   addDoc,
   collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   serverTimestamp,
   updateDoc,
+  where,
+  orderBy,
 } from "firebase/firestore";
 
 import { db } from "./firebase";
@@ -40,7 +44,7 @@ const ORDER_STORAGE_KEY = "nha_mit_order_ids";
 const ORDER_SEARCH_KEY = "nha_mit_last_order_search";
 const CANCEL_LIMIT_MS = 5 * 60 * 1000;
 
-const products = [
+const defaultProducts = [
   {
     id: "dua-hau",
     name: "Dưa hấu",
@@ -133,6 +137,21 @@ const products = [
     image: bacXiuImg,
   },
 ];
+const productImages = {
+  "dua-hau": duaHauImg,
+  "ca-chua": caChuaImg,
+  thom: thomImg,
+  oi: oiImg,
+  "ca-rot": caRotImg,
+  tao: taoImg,
+  cam: camImg,
+  mia: miaImg,
+  rauma: rauMaImg,
+  cafe1: cafeMuoiImg,
+  cafe2: cafeDenImg,
+  cafe3: cafeSuaImg,
+  cafe4: bacXiuImg,
+};
 
 const defaultForm = {
   name: "",
@@ -238,6 +257,8 @@ export default function App() {
   const [searchedOrder, setSearchedOrder] = useState(null);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [orderSearchLoading, setOrderSearchLoading] = useState(false);
+  const [products, setProducts] = useState(defaultProducts);
+  const [productsLoading, setProductsLoading] = useState(true);
 
   const order = useMemo(() => {
     const items = products
@@ -312,25 +333,74 @@ export default function App() {
       shippingLabel,
       total,
     };
-  }, [cart, deliveryInfo]);
-
+  }, [cart, deliveryInfo, products]);
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setProductsLoading(true);
+  
+        const q = query(
+          collection(db, "products"),
+          where("active", "==", true),
+          orderBy("sortOrder", "asc")
+        );
+  
+        const snap = await getDocs(q);
+  
+        if (snap.empty) {
+          setProducts(defaultProducts);
+          return;
+        }
+  
+        const list = snap.docs.map((item) => {
+          const data = item.data();
+  
+          return {
+            id: item.id,
+            name: data.name,
+            price: Number(data.price || 0),
+            desc: data.desc || "",
+            inStock: data.inStock !== false,
+            image: productImages[data.imageKey] || productImages[item.id] || camImg,
+            imageKey: data.imageKey || item.id,
+          };
+        });
+  
+        setProducts(list);
+      } catch (error) {
+        console.error(error);
+        setProducts(defaultProducts);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+  
+    loadProducts();
+  }, []);
   const changeQty = (productId, delta) => {
+    const product = products.find((item) => item.id === productId);
+  
+    if (delta > 0 && (!product || product.inStock === false)) {
+      alert("Món này hiện đã hết hàng.");
+      return;
+    }
+  
     setCart((prev) => {
       const currentQty = prev[productId] || 0;
       const nextQty = Math.max(0, currentQty + delta);
-
+  
       if (nextQty === 0) {
         const nextCart = { ...prev };
         delete nextCart[productId];
         return nextCart;
       }
-
+  
       return {
         ...prev,
         [productId]: nextQty,
       };
     });
-
+  
     setCopied(false);
   };
 
@@ -494,6 +564,7 @@ export default function App() {
         Ghi chú: ${form.note.trim() || "Không có"}`;
   };
   const saveOrderToFirebase = async () => {
+    const cancelToken = crypto.randomUUID();
     const orderData = {
       customer: {
         name: form.name,
@@ -507,6 +578,7 @@ export default function App() {
         qty: item.qty,
         price: item.price,
         total: item.qty * item.price,
+        inStockAtOrderTime: item.inStock !== false,
       })),
 
       pricing: {
@@ -527,6 +599,9 @@ export default function App() {
       },
 
       note: form.note,
+
+      cancelToken,
+
       createdAt: serverTimestamp(),
       createdAtMillis: Date.now(),
       status: "pending",
@@ -537,7 +612,10 @@ export default function App() {
       orderData
     );
 
-    return docRef.id;
+    return {
+      orderId: docRef.id,
+      cancelToken,
+    };
   };
   const getStoredOrderIds = () => {
     try {
@@ -547,12 +625,15 @@ export default function App() {
     }
   };
   
-  const saveOrderIdToStorage = (orderId) => {
+  const saveOrderIdToStorage = (orderId, cancelToken) => {
     const oldIds = getStoredOrderIds();
   
     const nextIds = [
-      orderId,
-      ...oldIds.filter((id) => id !== orderId),
+      {
+        orderId,
+        cancelToken,
+      },
+      ...oldIds.filter((item) => item.orderId !== orderId),
     ].slice(0, 20);
   
     localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(nextIds));
@@ -615,8 +696,8 @@ export default function App() {
     localStorage.setItem(ORDER_SEARCH_KEY, code);
   
     const storedIds = getStoredOrderIds();
-  
-    if (!storedIds.includes(code)) {
+    const storedOrder = storedIds.find((item) => item.orderId === code);
+    if (!storedOrder) {
       alert("Mã đơn này không được tạo trên thiết bị này.");
       return;
     }
@@ -727,8 +808,8 @@ export default function App() {
     setSubmitLoading(true);
   
     try {
-      const orderId = await saveOrderToFirebase();
-      saveOrderIdToStorage(orderId);
+      const { orderId, cancelToken } = await saveOrderToFirebase();
+      saveOrderIdToStorage(orderId, cancelToken);
   
       const message = `Mã đơn: ${orderId}\n\n${createOrderMessage()}`;
   
@@ -951,13 +1032,19 @@ export default function App() {
 
                     <button
                       type="button"
+                      disabled={product.inStock === false}
                       onClick={() => changeQty(product.id, 1)}
-                      className="h-10 w-10 rounded-full bg-[#0b6b2b] text-xl font-black text-white transition hover:bg-green-800"
+                      className="h-10 w-10 rounded-full bg-[#0b6b2b] text-xl font-black text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                     >
                       +
                     </button>
                   </div>
                 </div>
+                {product.inStock === false && (
+                  <div className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-500">
+                    Hết hàng
+                  </div>
+                )}
               </article>
             ))}
           </div>

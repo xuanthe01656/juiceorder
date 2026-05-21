@@ -6,6 +6,7 @@ import {
   orderBy,
   query,
   updateDoc,
+  setDoc,
 } from "firebase/firestore";
 import {
   onAuthStateChanged,
@@ -62,6 +63,90 @@ export default function AdminOrders() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState("");
+  const [products, setProducts] = useState([]);
+  const [productSaving, setProductSaving] = useState(false);
+  const [productForm, setProductForm] = useState({
+    id: "",
+    name: "",
+    price: "",
+    desc: "",
+    sortOrder: "",
+  });
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [updatingProductId, setUpdatingProductId] = useState("");
+  
+  const saveProduct = async (event) => {
+    event.preventDefault();
+  
+    if (productSaving) return;
+  
+    const productId = productForm.id.trim();
+  
+    if (!productId) {
+      alert("Vui lòng nhập mã sản phẩm.");
+      return;
+    }
+  
+    if (!productForm.name.trim()) {
+      alert("Vui lòng nhập tên sản phẩm.");
+      return;
+    }
+  
+    if (!Number(productForm.price)) {
+      alert("Vui lòng nhập giá hợp lệ.");
+      return;
+    }
+  
+    try {
+      setProductSaving(true);
+  
+      await setDoc(doc(db, "products", productId), {
+        name: productForm.name.trim(),
+        price: Number(productForm.price),
+        desc: productForm.desc.trim(),
+        imageKey: productId,
+        sortOrder: Number(productForm.sortOrder || products.length + 1),
+        inStock: true,
+        active: true,
+        updatedAtMillis: Date.now(),
+      });
+  
+      setProductForm({
+        id: "",
+        name: "",
+        price: "",
+        desc: "",
+        sortOrder: "",
+      });
+  
+      alert("Đã lưu sản phẩm.");
+    } catch (error) {
+      console.error(error);
+      alert("Không thể lưu sản phẩm.");
+    } finally {
+      setProductSaving(false);
+    }
+  };
+  const hideProduct = async (product) => {
+    const ok = window.confirm(`Ẩn sản phẩm "${product.name}" khỏi menu khách?`);
+  
+    if (!ok) return;
+  
+    try {
+      setUpdatingProductId(product.id);
+  
+      await updateDoc(doc(db, "products", product.id), {
+        active: false,
+        inStock: false,
+        updatedAtMillis: Date.now(),
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Không thể ẩn sản phẩm.");
+    } finally {
+      setUpdatingProductId("");
+    }
+  };
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -104,7 +189,48 @@ export default function AdminOrders() {
 
     return () => unsub();
   }, [user, soundEnabled]);
-
+  useEffect(() => {
+    if (!user) {
+      setProducts([]);
+      return;
+    }
+  
+    setProductsLoading(true);
+  
+    const q = query(
+      collection(db, "products"),
+      orderBy("sortOrder", "asc")
+    );
+  
+    const unsub = onSnapshot(q, (snapshot) => {
+      const list = snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }));
+  
+      setProducts(list);
+      setProductsLoading(false);
+    });
+  
+    return () => unsub();
+  }, [user]);
+  const toggleProductStock = async (product) => {
+    if (updatingProductId) return;
+  
+    try {
+      setUpdatingProductId(product.id);
+  
+      await updateDoc(doc(db, "products", product.id), {
+        inStock: product.inStock === false,
+        updatedAtMillis: Date.now(),
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Không thể cập nhật tình trạng món.");
+    } finally {
+      setUpdatingProductId("");
+    }
+  };
   const playNotifySound = () => {
     try {
       const audioContext = new AudioContext();
@@ -311,7 +437,112 @@ export default function AdminOrders() {
             </div>
           ))}
         </section>
+        <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
+          <div className="mb-5">
+            <h2 className="text-2xl font-black text-[#0b6b2b]">
+              Quản lý món bán
+            </h2>
+            <p className="text-sm text-slate-500">
+              Bật/tắt tình trạng còn hàng để khách không đặt nhầm.
+            </p>
+          </div>
+          <form
+            onSubmit={saveProduct}
+            className="mb-6 grid gap-3 rounded-2xl bg-green-50 p-4 lg:grid-cols-6"
+          >
+            <input
+              value={productForm.id}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, id: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="id: matcha"
+            />
 
+            <input
+              value={productForm.name}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, name: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Tên món"
+            />
+
+            <input
+              value={productForm.price}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, price: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Giá"
+              inputMode="numeric"
+            />
+            <input
+              value={productForm.desc}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, desc: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Mô tả"
+            />
+
+            <button
+              type="submit"
+              disabled={productSaving}
+              className="rounded-xl bg-orange-500 px-4 py-2 font-black text-white disabled:opacity-60"
+            >
+              {productSaving ? "Đang lưu..." : "Thêm món"}
+            </button>
+          </form>
+          {productsLoading ? (
+            <p className="rounded-2xl bg-slate-50 p-4">Đang tải món...</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {products.map((product) => (
+                <div
+                  key={product.id}
+                  className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="font-black text-[#0b6b2b]">
+                        {product.name}
+                      </h3>
+                      <p className="text-sm font-bold text-slate-500">
+                        {formatMoney(product.price)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={updatingProductId === product.id}
+                      onClick={() => toggleProductStock(product)}
+                      className={`rounded-xl px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 ${
+                        product.inStock === false
+                          ? "bg-red-500"
+                          : "bg-[#0b6b2b]"
+                      }`}
+                    >
+                      {updatingProductId === product.id
+                        ? "Đang lưu..."
+                        : product.inStock === false
+                        ? "Hết hàng"
+                        : "Còn hàng"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingProductId === product.id}
+                      onClick={() => hideProduct(product)}
+                      className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-black text-slate-700 disabled:opacity-60"
+                    >
+                      Ẩn
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
         <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
