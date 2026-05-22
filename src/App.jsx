@@ -65,8 +65,10 @@ const defaultForm = {
   name: "",
   phone: "",
   address: "",
-  sugar: "Ít đường",
-  ice: "Ít đá",
+  sweetenerType: "sugar",
+  sugar: "Bình thường",
+  milk: "Bình thường",
+  ice: "Bình thường",
   note: "",
 };
 
@@ -124,34 +126,76 @@ const calculateDistanceKm = (from, to) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+// const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+// const searchAddressApi = async (keyword) => {
+//   const address = `${keyword}, Đà Nẵng, Việt Nam`;
+//   const url =
+//     `https://maps.googleapis.com/maps/api/geocode/json` +
+//     `?address=${encodeURIComponent(address)}` +
+//     `&components=country:VN|administrative_area:Đà Nẵng` +
+//     `&language=vi` +
+//     `&key=${GOOGLE_MAPS_API_KEY}`;
+
+//   const response = await fetch(url);
+
+//   if (!response.ok) {
+//     throw new Error("Không thể tìm địa chỉ");
+//   }
+
+//   const data = await response.json();
+//   console.log(data);
+//   if (data.status !== "OK") {
+//     return [];
+//   }
+
+//   return data.results.map((item) => ({
+//     place_id: item.place_id,
+//     display_name: item.formatted_address,
+//     lat: item.geometry.location.lat,
+//     lon: item.geometry.location.lng,
+//   }));
+// };
 const searchAddressApi = async (keyword) => {
+  // Vẫn giữ logic nối thêm Đà Nẵng để khoanh vùng tìm kiếm chính xác hơn
   const address = `${keyword}, Đà Nẵng, Việt Nam`;
-  const url =
-    `https://maps.googleapis.com/maps/api/geocode/json` +
-    `?address=${encodeURIComponent(address)}` +
-    `&components=country:VN|administrative_area:Đà Nẵng` +
-    `&language=vi` +
-    `&key=${GOOGLE_MAPS_API_KEY}`;
+  
+  // URL API của Nominatim (OpenStreetMap)
+  const url = 
+    `https://nominatim.openstreetmap.org/search` +
+    `?q=${encodeURIComponent(address)}` +
+    `&format=json` +
+    `&addressdetails=1` +
+    `&countrycodes=vn` + 
+    `&limit=5`;
 
-  const response = await fetch(url);
+  // Thêm header Accept-Language để ưu tiên trả về tiếng Việt
+  const response = await fetch(url, {
+    headers: {
+      "Accept-Language": "vi-VN,vi;q=0.9",
+      // "User-Agent": "NhaMitJuiceApp/1.0" // Nên mở comment dòng này và đặt tên app của bạn khi đưa lên thực tế
+    }
+  });
 
   if (!response.ok) {
     throw new Error("Không thể tìm địa chỉ");
   }
 
   const data = await response.json();
-
-  if (data.status !== "OK") {
+  console.log(data);
+  
+  // Nominatim trả về trực tiếp một mảng (array). Nếu mảng rỗng nghĩa là không tìm thấy.
+  if (!Array.isArray(data) || data.length === 0) {
     return [];
   }
 
-  return data.results.map((item) => ({
-    place_id: item.place_id,
-    display_name: item.formatted_address,
-    lat: item.geometry.location.lat,
-    lon: item.geometry.location.lng,
+  // Map lại dữ liệu để trả ra đúng cấu trúc (format) mà app của bạn đang dùng
+  return data.map((item) => ({
+    place_id: item.place_id.toString(),
+    display_name: item.display_name,
+    // Nominatim trả về lat/lon ở dạng chuỗi (string), ta ép kiểu về Number cho an toàn khi tính khoảng cách
+    lat: Number(item.lat),
+    lon: Number(item.lon),
   }));
 };
 export default function App() {
@@ -237,8 +281,8 @@ export default function App() {
       shipping = 20000;
       shippingLabel = "Phí ship ngoài 5km";
     }
-
-    const total = Math.max(0, subtotal - discount + shipping);
+    const surcharge = form.sweetenerType === "milk" ? 2000 : 0;
+    const total = Math.max(0, subtotal - discount + shipping + surcharge);
 
     return {
       items,
@@ -248,9 +292,10 @@ export default function App() {
       discountLabel,
       shipping,
       shippingLabel,
+      surcharge, // Trả thêm field surcharge ra ngoài
       total,
     };
-  }, [cart, deliveryInfo, products]);
+  }, [cart, deliveryInfo, products, form.sweetenerType]);
   useEffect(() => {
     const loadProducts = async () => {
       try {
@@ -458,27 +503,28 @@ export default function App() {
       })
       .join("\n");
 
-    return `Xin chào Nước ép nhà Mit, mình muốn đặt hàng:
-        ${productLines}
-        --- THÔNG TIN ĐƠN ---
-        Số lượng: ${order.qtyTotal} ly
-        Tạm tính: ${formatMoney(order.subtotal)}
-        Ưu đãi: -${formatMoney(order.discount)} (${order.discountLabel})
-        Ship: ${order.shipping === 0 ? "Free" : formatMoney(order.shipping)}
-        Tổng thanh toán: ${formatMoney(order.total)}
+      return `Xin chào Nước ép nhà Mit, mình muốn đặt hàng:
+      ${productLines}
+      --- THÔNG TIN ĐƠN ---
+      Số lượng: ${order.qtyTotal} ly
+      Tạm tính: ${formatMoney(order.subtotal)}
+      Ưu đãi: -${formatMoney(order.discount)} (${order.discountLabel})
+      Ship: ${order.shipping === 0 ? "Free" : formatMoney(order.shipping)}
+      ${order.surcharge > 0 ? `Phụ thu đổi sữa: +${formatMoney(order.surcharge)}\n` : ""}\
+      Tổng thanh toán: ${formatMoney(order.total)}
 
-        --- THÔNG TIN KHÁCH ---
-        Tên: ${form.name.trim()}
-        SĐT: ${form.phone.trim()}
-        Địa chỉ: ${form.address.trim()}
-        Khoảng cách: ${
-          deliveryInfo.distanceKm === null
-            ? "Chưa xác định"
-            : `${deliveryInfo.distanceKm.toFixed(2)}km từ quán`
-        }
-        Đường: ${form.sugar}
-        Đá: ${form.ice}
-        Ghi chú: ${form.note.trim() || "Không có"}`;
+      --- THÔNG TIN KHÁCH ---
+      Tên: ${form.name.trim()}
+      SĐT: ${form.phone.trim()}
+      Địa chỉ: ${form.address.trim()}
+      Khoảng cách: ${
+        deliveryInfo.distanceKm === null
+          ? "Chưa xác định"
+          : `${deliveryInfo.distanceKm.toFixed(2)}km từ quán`
+      }
+      ${form.sweetenerType === "milk" ? `Sữa: ${form.milk}` : `Đường: ${form.sugar}`}
+      Đá: ${form.ice}
+      Ghi chú: ${form.note.trim() || "Không có"}`;
   };
   const saveOrderToFirebase = async () => {
     const cancelToken = crypto.randomUUID();
@@ -502,6 +548,7 @@ export default function App() {
         subtotal: order.subtotal,
         discount: order.discount,
         shipping: order.shipping,
+        surcharge: order.surcharge,
         total: order.total,
       },
 
@@ -511,7 +558,9 @@ export default function App() {
       },
 
       options: {
-        sugar: form.sugar,
+        sweetenerType: form.sweetenerType,
+        sugar: form.sweetenerType === "sugar" ? form.sugar : "",
+        milk: form.sweetenerType === "milk" ? form.milk : "",
         ice: form.ice,
       },
 
@@ -1128,30 +1177,77 @@ export default function App() {
             </div>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block font-bold">Đường</label>
-                <select
-                  value={form.sugar}
-                  onChange={(event) => updateForm("sugar", event.target.value)}
-                  className="w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
-                >
-                  <option>Ít đường</option>
-                  <option>Không đường</option>
-                  <option>Bình thường</option>
-                </select>
+              {/* CỘT 1: ĐỘ NGỌT */}
+              <div className="flex flex-col">
+                <label className="mb-1 block font-bold">Độ ngọt</label>
+                
+                {/* Radio buttons chọn Đường hoặc Sữa */}
+                <div className="mb-3 flex items-center gap-5 text-sm">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="sweetenerType"
+                      value="sugar"
+                      checked={form.sweetenerType === "sugar"}
+                      onChange={(event) => updateForm("sweetenerType", event.target.value)}
+                      className="h-4 w-4 accent-[#0b6b2b]"
+                    />
+                    Dùng đường
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="radio"
+                      name="sweetenerType"
+                      value="milk"
+                      checked={form.sweetenerType === "milk"}
+                      onChange={(event) => updateForm("sweetenerType", event.target.value)}
+                      className="h-4 w-4 accent-[#0b6b2b]"
+                    />
+                    Dùng sữa (+2k)
+                  </label>
+                </div>
+
+                {/* Conditional rendering cho Select - Đã thêm mt-auto */}
+                {form.sweetenerType === "sugar" ? (
+                  <select
+                    value={form.sugar}
+                    onChange={(event) => updateForm("sugar", event.target.value)}
+                    className="mt-auto w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
+                  >
+                    
+                    <option>Bình thường</option>
+                    <option>Nhiều đường</option>
+                    <option>Ít đường</option>
+                    <option>Không đường</option>
+                  </select>
+                ) : (
+                  <select
+                    value={form.milk}
+                    onChange={(event) => updateForm("milk", event.target.value)}
+                    className="mt-auto w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
+                  >
+                    
+                    <option>Bình thường</option>
+                    <option>Ít sữa</option>
+                    <option>Nhiều sữa</option>
+                    <option>Không sữa</option>
+                  </select>
+                )}
               </div>
 
-              <div>
+              {/* CỘT 2: ĐÁ */}
+              <div className="flex flex-col">
                 <label className="mb-1 block font-bold">Đá</label>
+                
+                {/* Đã thêm mt-auto để đẩy select này xuống bằng hàng với cột bên trái */}
                 <select
                   value={form.ice}
                   onChange={(event) => updateForm("ice", event.target.value)}
-                  className="w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
+                  className="mt-auto w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
                 >
-                  <option>Ít đá</option>
-                  <option>Nhiều đá</option>
-                  <option>Không đá</option>
                   <option>Bình thường</option>
+                  <option>Ít đá</option>
+                  <option>Không đá</option>
                 </select>
               </div>
             </div>
@@ -1280,6 +1376,12 @@ export default function App() {
                 {deliveryInfo.distanceKm !== null &&
                   ` - ${deliveryInfo.distanceKm.toFixed(2)}km`}
               </p>
+              {order.surcharge > 0 && (
+                <div className="mt-2 flex justify-between gap-4 text-rose-500">
+                  <span>Phụ thu đổi sữa</span>
+                  <span>+{formatMoney(order.surcharge)}</span>
+                </div>
+              )}
               <div className="mt-4 flex justify-between gap-4 rounded-2xl bg-green-50 p-4 text-2xl text-[#0b6b2b]">
                 <span>Tổng</span>
                 <span>{formatMoney(order.total)}</span>
@@ -1386,8 +1488,8 @@ export default function App() {
             </div>
 
             <div className="mt-5 rounded-2xl border border-dashed border-green-300 p-4 text-sm text-slate-600">
-              <p>
-                Đường: <b>{searchedOrder.options?.sugar}</b>
+            <p>
+                Độ ngọt: <b>{searchedOrder.options?.sweetenerType === "milk" ? `Sữa (${searchedOrder.options?.milk})` : `Đường (${searchedOrder.options?.sugar})`}</b>
               </p>
               <p>
                 Đá: <b>{searchedOrder.options?.ice}</b>
