@@ -10,6 +10,7 @@ import {
   updateDoc,
   where,
   orderBy,
+  onSnapshot,
 } from "firebase/firestore";
 
 import { db } from "./firebase";
@@ -220,6 +221,48 @@ export default function App() {
   const [orderSearchLoading, setOrderSearchLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(true);
+  // --- STATE CHO PHẦN ĐÁNH GIÁ (REVIEW) ---
+  const [reviews, setReviews] = useState([]);
+  const [reviewForm, setReviewForm] = useState({ name: "", rating: 5, comment: "" });
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  // 1. Lắng nghe danh sách đánh giá từ Firebase
+  useEffect(() => {
+    const q = query(collection(db, "reviews"), orderBy("createdAtMillis", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = [];
+      snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
+      setReviews(data);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Hàm xử lý gửi đánh giá
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewForm.name.trim() || !reviewForm.comment.trim()) {
+      alert("Vui lòng nhập tên và lời đánh giá của bạn nhé!");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      await addDoc(collection(db, "reviews"), {
+        name: reviewForm.name,
+        rating: reviewForm.rating,
+        comment: reviewForm.comment,
+        createdAt: serverTimestamp(),
+        createdAtMillis: Date.now(),
+      });
+      // Reset form sau khi gửi thành công
+      setReviewForm({ name: "", rating: 5, comment: "" });
+      alert("Cảm ơn bạn đã để lại đánh giá!");
+    } catch (error) {
+      console.error("Lỗi khi gửi đánh giá:", error);
+      alert("Không thể gửi đánh giá lúc này, vui lòng thử lại sau.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   const order = useMemo(() => {
     const items = products
@@ -674,28 +717,28 @@ export default function App() {
   
     localStorage.setItem(ORDER_SEARCH_KEY, code);
   
+    // 1. Kiểm tra xem mã đơn này có nằm trong lịch sử của máy hiện tại không
     const storedIds = getStoredOrderIds();
-    const storedOrder = storedIds.find(
+    const isLocalDevice = !!storedIds.find(
       (item) => item.orderId?.trim() === code
     );
-    if (!storedOrder) {
-      alert("Mã đơn này không được tạo trên thiết bị này.");
-      return;
-    }
   
     try {
       setOrderSearchLoading(true);
   
+      // 2. Luôn gọi lên Firebase để lấy dữ liệu (dù có phải máy đặt hay không)
       const orderRef = doc(db, "orders", code);
       const snap = await getDoc(orderRef);
   
       if (!snap.exists()) {
-        alert("Không tìm thấy đơn hàng.");
+        alert("Không tìm thấy đơn hàng trên hệ thống.");
         return;
       }
   
+      // 3. Đưa cờ isLocalDevice vào state để giao diện biết cách xử lý
       setSearchedOrder({
         id: snap.id,
+        isLocalDevice, // <-- Thêm dòng này
         ...snap.data(),
       });
   
@@ -711,6 +754,12 @@ export default function App() {
   const cancelOrder = async () => {
     if (cancelLoading) return;
     if (!searchedOrder) return;
+
+    // Chặn người dùng gọi hàm hủy nếu họ không dùng thiết bị lúc đặt
+    if (!searchedOrder.isLocalDevice) {
+      alert("Chỉ có thể hủy đơn hàng trên thiết bị đã đặt đơn.");
+      return;
+    }
   
     if (searchedOrder.status === "cancelled") {
       alert("Đơn này đã được hủy trước đó.");
@@ -1394,6 +1443,95 @@ export default function App() {
             </div>
           </aside>
         </section>
+        {/* ================= PHẦN ĐÁNH GIÁ (REVIEWS) ================= */}
+      <section className="mx-auto max-w-5xl px-4 py-12">
+        <div className="mb-8 text-center">
+          <h2 className="text-3xl font-black text-[#0b6b2b] uppercase">
+            Khách Hàng Nói Gì Về Chúng Tôi
+          </h2>
+          <p className="mt-2 text-slate-600">Những lời nhận xét chân thành từ khách hàng</p>
+        </div>
+
+        {/* Form Đánh Giá */}
+        <div className="mx-auto mb-10 max-w-2xl rounded-[2rem] bg-orange-50 p-6 shadow-sm border border-orange-100">
+          <h3 className="mb-4 text-center text-lg font-bold text-orange-600">
+            Để lại đánh giá của bạn
+          </h3>
+          <form onSubmit={submitReview} className="space-y-4">
+            <div className="flex items-center justify-center space-x-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  type="button"
+                  key={star}
+                  onClick={() => setReviewForm({ ...reviewForm, rating: star })}
+                  className={`text-4xl transition-transform hover:scale-110 ${
+                    star <= reviewForm.rating ? "text-yellow-400" : "text-slate-300"
+                  }`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            
+            <input
+              type="text"
+              placeholder="Tên của bạn"
+              value={reviewForm.name}
+              onChange={(e) => setReviewForm({ ...reviewForm, name: e.target.value })}
+              className="w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
+              required
+            />
+            
+            <textarea
+              rows="3"
+              placeholder="Cảm nhận của bạn về đồ uống..."
+              value={reviewForm.comment}
+              onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })}
+              className="w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-orange-500"
+              required
+            ></textarea>
+            
+            <button
+              type="submit"
+              disabled={isSubmittingReview}
+              className="w-full rounded-xl bg-orange-500 p-3 font-bold text-white shadow-md transition hover:bg-orange-600 disabled:bg-slate-400"
+            >
+              {isSubmittingReview ? "Đang gửi..." : "Gửi Đánh Giá"}
+            </button>
+          </form>
+        </div>
+
+        {/* Grid Hiển Thị Đánh Giá */}
+        {reviews.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+            {reviews.map((review) => (
+              <div
+                key={review.id}
+                className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:shadow-md"
+              >
+                <div>
+                  <div className="mb-2 flex items-center gap-1 text-yellow-400 text-lg">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span key={star}>{star <= review.rating ? "★" : "☆"}</span>
+                    ))}
+                  </div>
+                  <p className="text-slate-700 italic">"{review.comment}"</p>
+                </div>
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <p className="font-bold text-slate-800">{review.name}</p>
+                  <p className="text-xs text-slate-400">
+                    {review.createdAtMillis
+                      ? new Date(review.createdAtMillis).toLocaleDateString("vi-VN")
+                      : "Gần đây"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-center text-slate-500">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
+        )}
+      </section>
       </main>
 
       <footer className="mt-12 bg-[#0b6b2b] px-4 py-8 text-center text-white">
@@ -1500,24 +1638,27 @@ export default function App() {
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={cancelOrder}
-              disabled={
-                cancelLoading ||
-                searchedOrder.status === "cancelled" ||
-                !canCancelOrder(searchedOrder)
-              }
-              className="rounded-2xl bg-red-500 px-6 py-4 font-black uppercase text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {cancelLoading
-                ? "Đang hủy..."
-                : searchedOrder.status === "cancelled"
-                ? "Đơn đã hủy"
-                : canCancelOrder(searchedOrder)
-                ? "Hủy đơn"
-                : "Quá 5 phút"}
-            </button>
+              <button
+                type="button"
+                onClick={cancelOrder}
+                disabled={
+                  cancelLoading ||
+                  searchedOrder.status === "cancelled" ||
+                  !canCancelOrder(searchedOrder) ||
+                  !searchedOrder.isLocalDevice // <-- Vô hiệu hóa nút nếu không phải máy gốc
+                }
+                className="rounded-2xl bg-red-500 px-6 py-4 font-black uppercase text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                {cancelLoading
+                  ? "Đang hủy..."
+                  : searchedOrder.status === "cancelled"
+                  ? "Đơn đã hủy"
+                  : !searchedOrder.isLocalDevice 
+                  ? "Chỉ máy đặt mới được hủy"
+                  : canCancelOrder(searchedOrder)
+                  ? "Hủy đơn"
+                  : "Quá 5 phút"}
+              </button>
 
               <a
                 href={buildZaloUrl(PHONE_ZALO, `Mình cần hỗ trợ đơn ${searchedOrder.id}`)}

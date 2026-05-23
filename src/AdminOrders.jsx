@@ -633,9 +633,11 @@ export default function AdminOrders() {
       </main>
 
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-2xl">
-            <div className="flex justify-between gap-4 border-b pb-4">
+            
+            {/* Header Modal */}
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
                 <p className="text-sm font-bold uppercase text-orange-500">
                   Chi tiết đơn
@@ -643,55 +645,120 @@ export default function AdminOrders() {
                 <h3 className="text-2xl font-black text-[#0b6b2b]">
                   {selectedOrder.id}
                 </h3>
-                <p className="text-sm font-bold">
-                  {statusText[selectedOrder.status] || selectedOrder.status}
-                </p>
               </div>
-
               <button
                 type="button"
                 onClick={() => setSelectedOrder(null)}
-                className="rounded-full bg-slate-100 px-4 py-2 font-black"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-slate-200"
               >
                 ×
               </button>
             </div>
 
-            <div className="mt-5 space-y-3">
-              {(selectedOrder.items || []).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex justify-between rounded-2xl bg-slate-50 p-4"
-                >
-                  <div>
-                    <b>{item.name}</b>
-                    <p className="text-sm text-slate-500">
-                      {item.qty} ly x {formatMoney(item.price)}
-                    </p>
-                  </div>
-                  <b>{formatMoney(item.total)}</b>
+            {/* Nội dung chi tiết */}
+            <div className="mt-5 space-y-4 text-slate-700">
+              
+              {/* Khối 1: Thời gian & Trạng thái */}
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">
+                  Thời gian đặt: <b className="text-slate-800">{selectedOrder.createdAtMillis ? new Date(selectedOrder.createdAtMillis).toLocaleString("vi-VN") : "Không rõ"}</b>
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Trạng thái hiện tại: <span className="inline-block rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">{statusText[selectedOrder.status] || selectedOrder.status}</span>
+                </p>
+              </div>
+
+              {/* Khối 2: Thông tin Khách hàng */}
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                <h4 className="mb-2 text-xs font-black tracking-wider text-blue-900 uppercase">Thông tin giao hàng</h4>
+                <div className="space-y-1.5 text-sm">
+                  <p>Khách hàng: <b className="text-base text-slate-900">{selectedOrder.customer?.name || "Không có tên"}</b></p>
+                  <p>
+                    Số điện thoại:{" "}
+                    <a href={`tel:${selectedOrder.customer?.phone}`} className="font-bold text-blue-600 underline hover:text-blue-800">
+                      {selectedOrder.customer?.phone || "Không có SĐT"}
+                    </a>
+                  </p>
+                  <p className="leading-relaxed">
+                    Địa chỉ: <b className="text-slate-900">{selectedOrder.customer?.address || "Không có địa chỉ"}</b>
+                  </p>
                 </div>
-              ))}
-            </div>
+              </div>
 
-            <div className="mt-5 rounded-2xl bg-orange-50 p-4">
-              <p>Tạm tính: {formatMoney(selectedOrder.pricing?.subtotal)}</p>
-              <p>Ưu đãi: -{formatMoney(selectedOrder.pricing?.discount)}</p>
-              <p>
-                Ship:{" "}
-                {selectedOrder.pricing?.shipping === 0
-                  ? "Free"
-                  : formatMoney(selectedOrder.pricing?.shipping)}
-              </p>
-              <p className="mt-2 text-xl font-black text-orange-500">
-                Tổng: {formatMoney(selectedOrder.pricing?.total)}
-              </p>
-            </div>
+              {/* Khối 3: Tùy chọn khẩu vị & Ghi chú */}
+              <div className="rounded-2xl border border-green-100 bg-green-50/40 p-4">
+                <h4 className="mb-2 text-xs font-black tracking-wider text-green-900 uppercase">Tùy chọn khẩu vị & Ghi chú</h4>
+                <div className="mb-2 grid grid-cols-2 gap-2 border-b border-green-100/60 pb-2 text-sm">
+                  <p>
+                    Độ ngọt:{" "}
+                    <b className="text-green-800">
+                      {selectedOrder.options?.sweetenerType === "milk"
+                        ? `Dùng sữa (${selectedOrder.options?.milk || "Bình thường"})`
+                        : `Dùng đường (${selectedOrder.options?.sugar || "Bình thường"})`}
+                    </b>
+                  </p>
+                  <p>Đá: <b className="text-green-800">{selectedOrder.options?.ice || "Bình thường"}</b></p>
+                </div>
+                <p className="text-sm">
+                  Ghi chú:{" "}
+                  <span className={`font-medium ${selectedOrder.note ? "rounded bg-yellow-100 px-1.5 py-0.5 text-slate-900" : "italic text-slate-400"}`}>
+                    {selectedOrder.note || "Không có ghi chú"}
+                  </span>
+                </p>
+              </div>
 
-            <div className="mt-5 rounded-2xl bg-green-50 p-4">
-              <p>Đường: {selectedOrder.options?.sugar}</p>
-              <p>Đá: {selectedOrder.options?.ice}</p>
-              <p>Ghi chú: {selectedOrder.note || "Không có"}</p>
+              {/* Khối 4: Danh sách món */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <h4 className="mb-3 text-xs font-black tracking-wider text-slate-900 uppercase">Danh sách món ({selectedOrder.items?.length || 0})</h4>
+                <div className="max-h-60 space-y-2.5 overflow-y-auto pr-1">
+                  {(selectedOrder.items || []).map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="flex items-start justify-between rounded-xl border border-slate-100 bg-slate-50 p-3"
+                    >
+                      <div>
+                        <b className="text-sm text-slate-800">{item.name}</b>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {item.qty} ly x {formatMoney(item.price)}
+                        </p>
+                      </div>
+                      <b className="text-sm text-slate-900">{formatMoney(item.total)}</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Khối 5: Chi tiết thanh toán */}
+              <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+                <h4 className="mb-2 text-xs font-black tracking-wider text-orange-900 uppercase">Chi tiết thanh toán</h4>
+                <div className="space-y-1.5 text-sm text-slate-600">
+                  <div className="flex justify-between">
+                    <span>Tạm tính:</span>
+                    <span>{formatMoney(selectedOrder.pricing?.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-red-600">
+                    <span>Ưu đãi giảm giá:</span>
+                    <span>-{formatMoney(selectedOrder.pricing?.discount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Phụ thu sữa:</span>
+                    <span>{selectedOrder.pricing?.surcharge ? `+${formatMoney(selectedOrder.pricing.surcharge)}` : "0đ"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Phí giao hàng:</span>
+                    <span>
+                      {selectedOrder.pricing?.shipping === 0
+                        ? "Miễn phí (Free)"
+                        : formatMoney(selectedOrder.pricing?.shipping)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between border-t border-orange-200 pt-2 text-base font-black text-orange-600">
+                    <span className="text-slate-800">Tổng doanh thu:</span>
+                    <span className="text-2xl">{formatMoney(selectedOrder.pricing?.total)}</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
