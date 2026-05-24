@@ -61,14 +61,15 @@ const productImages = {
   cafe3: cafeSuaImg,
   cafe4: bacXiuImg,
 };
+const COFFEE_PRODUCT_IDS = ["cafe1", "cafe2", "cafe3", "cafe4"];
 
+const isCoffeeProduct = (productId) => {
+  return COFFEE_PRODUCT_IDS.includes(productId);
+};
 const defaultForm = {
   name: "",
   phone: "",
   address: "",
-  sweetenerType: "sugar",
-  sugar: "Bình thường",
-  milk: "Bình thường",
   ice: "Bình thường",
   note: "",
 };
@@ -201,6 +202,7 @@ const searchAddressApi = async (keyword) => {
 };
 export default function App() {
   const [cart, setCart] = useState({});
+  const [productOptions, setProductOptions] = useState({});
   const [form, setForm] = useState(defaultForm);
   const [copied, setCopied] = useState(false);
   const addressInputRef = useRef(null);
@@ -235,7 +237,27 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+  const getProductOption = (productId) => {
+    return (
+      productOptions[productId] || {
+        sweetenerType: "sugar",
+        sugar: "Bình thường",
+        milk: "Bình thường",
+      }
+    );
+  };
 
+  const updateProductOption = (productId, field, value) => {
+    setProductOptions((prev) => ({
+      ...prev,
+      [productId]: {
+        ...getProductOption(productId),
+        [field]: value,
+      },
+    }));
+
+    setCopied(false);
+  };
   // 2. Hàm xử lý gửi đánh giá
   const submitReview = async (e) => {
     e.preventDefault();
@@ -266,25 +288,38 @@ export default function App() {
 
   const order = useMemo(() => {
     const items = products
-      .map((product) => ({
-        ...product,
-        qty: cart[product.id] || 0,
-      }))
+      .map((product) => {
+        const isCoffee = isCoffeeProduct(product.id);
+        const option = isCoffee
+          ? { sweetenerType: "none", sugar: "", milk: "" }
+          : getProductOption(product.id);
+
+        const qty = cart[product.id] || 0;
+        const milkSurcharge = !isCoffee && option.sweetenerType === "milk" ? 2000 : 0;
+
+        return {
+          ...product,
+          qty,
+          option,
+          milkSurcharge,
+          finalPrice: product.price + milkSurcharge,
+          baseTotal: product.price * qty,
+          milkSurchargeTotal: milkSurcharge * qty,
+          total: (product.price + milkSurcharge) * qty,
+        };
+      })
       .filter((item) => item.qty > 0);
 
     const qtyTotal = items.reduce((sum, item) => sum + item.qty, 0);
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.price * item.qty,
-      0
-    );
+    const subtotal = items.reduce((sum, item) => sum + item.baseTotal, 0);
 
     let discount = 0;
     let discountLabel = "Chưa áp dụng";
 
     if (qtyTotal >= 6) {
-      const allPrices = items
-        .flatMap((item) => Array(item.qty).fill(item.price))
-        .sort((a, b) => a - b);
+     const allPrices = items
+      .flatMap((item) => Array(item.qty).fill(item.price))
+      .sort((a, b) => a - b);
       const first6 = allPrices.slice(0, 6);
       const remaining = allPrices.slice(6);
       const first6Original = first6.reduce((sum, price) => sum + price, 0);
@@ -324,9 +359,14 @@ export default function App() {
       shipping = 20000;
       shippingLabel = "Phí ship ngoài 5km";
     }
-    const surcharge = form.sweetenerType === "milk" ? 2000 : 0;
-    const total = Math.max(0, subtotal - discount + shipping + surcharge);
-
+    const milkSurchargeTotal = items.reduce(
+      (sum, item) => sum + item.milkSurcharge * item.qty,
+      0
+    );
+    const total = Math.max(
+      0,
+      subtotal - discount + milkSurchargeTotal + shipping
+    );
     return {
       items,
       qtyTotal,
@@ -335,10 +375,10 @@ export default function App() {
       discountLabel,
       shipping,
       shippingLabel,
-      surcharge, // Trả thêm field surcharge ra ngoài
+      milkSurchargeTotal,
       total,
     };
-  }, [cart, deliveryInfo, products, form.sweetenerType]);
+  }, [cart, deliveryInfo, products, productOptions]);
   useEffect(() => {
     const loadProducts = async () => {
       try {
@@ -412,12 +452,29 @@ export default function App() {
   const clearCart = () => {
     setCart({});
     setCopied(false);
+    setProductOptions({});
   };
+  const removeCartItem = (productId) => {
+  setCart((prev) => {
+    const nextCart = { ...prev };
+    delete nextCart[productId];
+    return nextCart;
+  });
+
+  setProductOptions((prev) => {
+    const nextOptions = { ...prev };
+    delete nextOptions[productId];
+    return nextOptions;
+  });
+
+  setCopied(false);
+};
   const resetOrderForm = () => {
     setCart({});
     setForm(defaultForm);
     setAddressKeyword("");
     setAddressSuggestions([]);
+    setProductOptions({});
     setDeliveryInfo({
       distanceKm: null,
       isFreeShip: false,
@@ -540,9 +597,16 @@ export default function App() {
   const createOrderMessage = () => {
     const productLines = order.items
       .map((item, index) => {
+        const sweetText =
+          item.option.sweetenerType === "none"
+            ? ""
+            : item.option.sweetenerType === "milk"
+            ? `Sữa: ${item.option.milk} (+2k/ly)`
+            : `Đường: ${item.option.sugar}`;
+
         return `${index + 1}. ${item.name}: ${item.qty} ly x ${formatMoney(
-          item.price
-        )} = ${formatMoney(item.qty * item.price)}`;
+          item.finalPrice
+        )} = ${formatMoney(item.total)}${sweetText ? ` (${sweetText})` : ""}`;
       })
       .join("\n");
 
@@ -553,7 +617,7 @@ export default function App() {
       Tạm tính: ${formatMoney(order.subtotal)}
       Ưu đãi: -${formatMoney(order.discount)} (${order.discountLabel})
       Ship: ${order.shipping === 0 ? "Free" : formatMoney(order.shipping)}
-      ${order.surcharge > 0 ? `Phụ thu đổi sữa: +${formatMoney(order.surcharge)}\n` : ""}\
+      ${order.milkSurchargeTotal > 0 ? `Phụ thu đổi sữa: +${formatMoney(order.milkSurchargeTotal)}\n` : ""}
       Tổng thanh toán: ${formatMoney(order.total)}
 
       --- THÔNG TIN KHÁCH ---
@@ -565,7 +629,6 @@ export default function App() {
           ? "Chưa xác định"
           : `${deliveryInfo.distanceKm.toFixed(2)}km từ quán`
       }
-      ${form.sweetenerType === "milk" ? `Sữa: ${form.milk}` : `Đường: ${form.sugar}`}
       Đá: ${form.ice}
       Ghi chú: ${form.note.trim() || "Không có"}`;
   };
@@ -583,7 +646,12 @@ export default function App() {
         name: item.name,
         qty: item.qty,
         price: item.price,
-        total: item.qty * item.price,
+        finalPrice: item.finalPrice,
+        milkSurcharge: item.milkSurcharge,
+        total: item.total,
+        sweetenerType: item.option.sweetenerType,
+        sugar: item.option.sweetenerType === "sugar" ? item.option.sugar : "",
+        milk: item.option.sweetenerType === "milk" ? item.option.milk : "",
         inStockAtOrderTime: item.inStock !== false,
       })),
 
@@ -591,7 +659,7 @@ export default function App() {
         subtotal: order.subtotal,
         discount: order.discount,
         shipping: order.shipping,
-        surcharge: order.surcharge,
+        milkSurchargeTotal: order.milkSurchargeTotal,
         total: order.total,
       },
 
@@ -601,9 +669,6 @@ export default function App() {
       },
 
       options: {
-        sweetenerType: form.sweetenerType,
-        sugar: form.sweetenerType === "sugar" ? form.sugar : "",
-        milk: form.sweetenerType === "milk" ? form.milk : "",
         ice: form.ice,
       },
 
@@ -1081,6 +1146,70 @@ export default function App() {
                       +
                     </button>
                   </div>
+                  {!isCoffeeProduct(product.id) && (
+                  <div className="mt-4 rounded-2xl bg-green-50 p-3 text-left">
+                    <p className="mb-2 text-sm font-black text-[#0b6b2b]">
+                      Độ ngọt
+                    </p>
+
+                    <div className="mb-2 grid grid-cols-2 gap-2 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateProductOption(product.id, "sweetenerType", "sugar")
+                        }
+                        className={`rounded-xl border px-3 py-2 ${
+                          getProductOption(product.id).sweetenerType === "sugar"
+                            ? "border-[#0b6b2b] bg-[#0b6b2b] text-white"
+                            : "bg-white text-slate-600"
+                        }`}
+                      >
+                        Đường
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateProductOption(product.id, "sweetenerType", "milk")
+                        }
+                        className={`rounded-xl border px-3 py-2 ${
+                          getProductOption(product.id).sweetenerType === "milk"
+                            ? "border-orange-500 bg-orange-500 text-white"
+                            : "bg-white text-slate-600"
+                        }`}
+                      >
+                        Sữa +2k/ly
+                      </button>
+                    </div>
+
+                    {getProductOption(product.id).sweetenerType === "sugar" ? (
+                      <select
+                        value={getProductOption(product.id).sugar}
+                        onChange={(event) =>
+                          updateProductOption(product.id, "sugar", event.target.value)
+                        }
+                        className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                      >
+                        <option>Bình thường</option>
+                        <option>Nhiều đường</option>
+                        <option>Ít đường</option>
+                        <option>Không đường</option>
+                      </select>
+                    ) : (
+                      <select
+                        value={getProductOption(product.id).milk}
+                        onChange={(event) =>
+                          updateProductOption(product.id, "milk", event.target.value)
+                        }
+                        className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                      >
+                        <option>Bình thường</option>
+                        <option>Ít sữa</option>
+                        <option>Nhiều sữa</option>
+                      </select>
+                    )}
+                  </div>
+                  )}
                 </div>
                 
               </article>
@@ -1224,83 +1353,18 @@ export default function App() {
                 </div>
               )}
             </div>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {/* CỘT 1: ĐỘ NGỌT */}
-              <div className="flex flex-col">
-                <label className="mb-1 block font-bold">Độ ngọt</label>
-                
-                {/* Radio buttons chọn Đường hoặc Sữa */}
-                <div className="mb-3 flex items-center gap-5 text-sm">
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="radio"
-                      name="sweetenerType"
-                      value="sugar"
-                      checked={form.sweetenerType === "sugar"}
-                      onChange={(event) => updateForm("sweetenerType", event.target.value)}
-                      className="h-4 w-4 accent-[#0b6b2b]"
-                    />
-                    Dùng đường
-                  </label>
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="radio"
-                      name="sweetenerType"
-                      value="milk"
-                      checked={form.sweetenerType === "milk"}
-                      onChange={(event) => updateForm("sweetenerType", event.target.value)}
-                      className="h-4 w-4 accent-[#0b6b2b]"
-                    />
-                    Dùng sữa (+2k)
-                  </label>
-                </div>
-
-                {/* Conditional rendering cho Select - Đã thêm mt-auto */}
-                {form.sweetenerType === "sugar" ? (
-                  <select
-                    value={form.sugar}
-                    onChange={(event) => updateForm("sugar", event.target.value)}
-                    className="mt-auto w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
-                  >
-                    
-                    <option>Bình thường</option>
-                    <option>Nhiều đường</option>
-                    <option>Ít đường</option>
-                    <option>Không đường</option>
-                  </select>
-                ) : (
-                  <select
-                    value={form.milk}
-                    onChange={(event) => updateForm("milk", event.target.value)}
-                    className="mt-auto w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
-                  >
-                    
-                    <option>Bình thường</option>
-                    <option>Ít sữa</option>
-                    <option>Nhiều sữa</option>
-                    <option>Không sữa</option>
-                  </select>
-                )}
-              </div>
-
-              {/* CỘT 2: ĐÁ */}
-              <div className="flex flex-col">
-                <label className="mb-1 block font-bold">Đá</label>
-                
-                {/* Đã thêm mt-auto để đẩy select này xuống bằng hàng với cột bên trái */}
-                <select
-                  value={form.ice}
-                  onChange={(event) => updateForm("ice", event.target.value)}
-                  className="mt-auto w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
-                >
-                  <option>Bình thường</option>
-                  <option>Ít đá</option>
-                  <option>Không đá</option>
-                </select>
-              </div>
+            <div className="mt-4">
+              <label className="mb-1 block font-bold">Đá</label>
+              <select
+                value={form.ice}
+                onChange={(event) => updateForm("ice", event.target.value)}
+                className="w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
+              >
+                <option>Bình thường</option>
+                <option>Ít đá</option>
+                <option>Không đá</option>
+              </select>
             </div>
-
             <div className="mt-4">
               <label className="mb-1 block font-bold">Ghi chú</label>
               <textarea
@@ -1384,17 +1448,34 @@ export default function App() {
                       alt={item.name}
                       className="h-16 w-16 rounded-2xl object-contain"
                     />
-
+                    
                     <div className="min-w-0 flex-1">
                       <b className="block truncate">{item.name}</b>
+                      {item.option.sweetenerType !== "none" && (
+                        <p className="text-xs text-slate-500">
+                          {item.option.sweetenerType === "milk"
+                            ? `Sữa: ${item.option.milk} (+2k/ly)`
+                            : `Đường: ${item.option.sugar}`}
+                        </p>
+                      )}
                       <p className="text-sm text-slate-500">
-                        {item.qty} ly x {formatMoney(item.price)}
+                        {item.qty} ly x {formatMoney(item.finalPrice)}
                       </p>
                     </div>
 
-                    <b className="text-right text-sm sm:text-base">
-                      {formatMoney(item.qty * item.price)}
-                    </b>
+                    <div className="flex flex-col items-end gap-2">
+                      <b className="text-right text-sm sm:text-base">
+                        {formatMoney(item.total)}
+                      </b>
+
+                      <button
+                        type="button"
+                        onClick={() => removeCartItem(item.id)}
+                        className="rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-500 hover:bg-red-100"
+                      >
+                        Xóa
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -1425,10 +1506,10 @@ export default function App() {
                 {deliveryInfo.distanceKm !== null &&
                   ` - ${deliveryInfo.distanceKm.toFixed(2)}km`}
               </p>
-              {order.surcharge > 0 && (
+              {order.milkSurchargeTotal > 0 && (
                 <div className="mt-2 flex justify-between gap-4 text-rose-500">
                   <span>Phụ thu đổi sữa</span>
-                  <span>+{formatMoney(order.surcharge)}</span>
+                  <span>+{formatMoney(order.milkSurchargeTotal)}</span>
                 </div>
               )}
               <div className="mt-4 flex justify-between gap-4 rounded-2xl bg-green-50 p-4 text-2xl text-[#0b6b2b]">
@@ -1617,8 +1698,15 @@ export default function App() {
                   <div>
                     <b>{item.name}</b>
                     <p className="text-sm text-slate-500">
-                      {item.qty} ly x {formatMoney(item.price)}
+                      {item.qty} ly x {formatMoney(item.finalPrice || item.price)}
                     </p>
+                    {item.sweetenerType && item.sweetenerType !== "none" && (
+                        <p className="text-xs text-slate-500">
+                          {item.sweetenerType === "milk"
+                            ? `Sữa: ${item.milk || "Bình thường"} (+2k/ly)`
+                            : `Đường: ${item.sugar || "Bình thường"}`}
+                        </p>
+                      )}
                   </div>
                   <b>{formatMoney(item.total)}</b>
                 </div>
@@ -1626,9 +1714,6 @@ export default function App() {
             </div>
 
             <div className="mt-5 rounded-2xl border border-dashed border-green-300 p-4 text-sm text-slate-600">
-            <p>
-                Độ ngọt: <b>{searchedOrder.options?.sweetenerType === "milk" ? `Sữa (${searchedOrder.options?.milk})` : `Đường (${searchedOrder.options?.sugar})`}</b>
-              </p>
               <p>
                 Đá: <b>{searchedOrder.options?.ice}</b>
               </p>

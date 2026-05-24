@@ -689,14 +689,6 @@ export default function AdminOrders() {
               <div className="rounded-2xl border border-green-100 bg-green-50/40 p-4">
                 <h4 className="mb-2 text-xs font-black tracking-wider text-green-900 uppercase">Tùy chọn khẩu vị & Ghi chú</h4>
                 <div className="mb-2 grid grid-cols-2 gap-2 border-b border-green-100/60 pb-2 text-sm">
-                  <p>
-                    Độ ngọt:{" "}
-                    <b className="text-green-800">
-                      {selectedOrder.options?.sweetenerType === "milk"
-                        ? `Dùng sữa (${selectedOrder.options?.milk || "Bình thường"})`
-                        : `Dùng đường (${selectedOrder.options?.sugar || "Bình thường"})`}
-                    </b>
-                  </p>
                   <p>Đá: <b className="text-green-800">{selectedOrder.options?.ice || "Bình thường"}</b></p>
                 </div>
                 <p className="text-sm">
@@ -719,7 +711,12 @@ export default function AdminOrders() {
                       <div>
                         <b className="text-sm text-slate-800">{item.name}</b>
                         <p className="mt-0.5 text-xs text-slate-500">
-                          {item.qty} ly x {formatMoney(item.price)}
+                          {item.qty} ly x {formatMoney(item.finalPrice || item.price)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {item.sweetenerType === "milk"
+                            ? `Sữa: ${item.milk || "Bình thường"} (+2k/ly)`
+                            : `Đường: ${item.sugar || "Bình thường"}`}
                         </p>
                       </div>
                       <b className="text-sm text-slate-900">{formatMoney(item.total)}</b>
@@ -742,7 +739,7 @@ export default function AdminOrders() {
                   </div>
                   <div className="flex justify-between">
                     <span>Phụ thu sữa:</span>
-                    <span>{selectedOrder.pricing?.surcharge ? `+${formatMoney(selectedOrder.pricing.surcharge)}` : "0đ"}</span>
+                    <span>{selectedOrder.pricing?.milkSurchargeTotal ? `+${formatMoney(selectedOrder.pricing.milkSurchargeTotal)}` : "0đ"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Phí giao hàng:</span>
