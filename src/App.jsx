@@ -61,7 +61,7 @@ const productImages = {
   cafe3: cafeSuaImg,
   cafe4: bacXiuImg,
 };
-const COFFEE_PRODUCT_IDS = ["cafe1", "cafe2", "cafe3", "cafe4"];
+const COFFEE_PRODUCT_IDS = ["cafe1", "cafe2", "cafe3", "cafe4", "mia"];
 
 const isCoffeeProduct = (productId) => {
   return COFFEE_PRODUCT_IDS.includes(productId);
