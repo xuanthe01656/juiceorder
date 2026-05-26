@@ -31,7 +31,7 @@ import cafeSuaImg from "./assets/images/product_cafe_sua.png";
 import bacXiuImg from "./assets/images/product_bac_xiu.png";
 import freeShipImg from "./assets/images/free_ship.png";
 import comboTietKiemImg from "./assets/images/combo_tiet_kiem.png";
-import comboHealthyImg from "./assets/images/combo_healthy.png";
+//import comboHealthyImg from "./assets/images/combo_healthy.png";
 
 const PHONE_ZALO = "0332420710";
 const SHOP_ADDRESS = "317 Âu Cơ, Hòa Khánh Bắc, Liên Chiểu, Đà Nẵng";
@@ -316,19 +316,20 @@ export default function App() {
     let discount = 0;
     let discountLabel = "Chưa áp dụng";
 
-    if (qtyTotal >= 6) {
-     const allPrices = items
-      .flatMap((item) => Array(item.qty).fill(item.price))
-      .sort((a, b) => a - b);
-      const first6 = allPrices.slice(0, 6);
-      const remaining = allPrices.slice(6);
-      const first6Original = first6.reduce((sum, price) => sum + price, 0);
-      discount = Math.max(0, first6Original - 79000);
-      discountLabel =
-        qtyTotal === 6
-          ? "Combo healthy 6 ly = 79K"
-          : `Combo healthy 6 ly = 79K + ${remaining.length} ly tính thêm`;
-    } else if (qtyTotal >= 3 && qtyTotal <= 5) {
+    // if (qtyTotal >= 6) {
+    //  const allPrices = items
+    //   .flatMap((item) => Array(item.qty).fill(item.price))
+    //   .sort((a, b) => a - b);
+    //   const first6 = allPrices.slice(0, 6);
+    //   const remaining = allPrices.slice(6);
+    //   const first6Original = first6.reduce((sum, price) => sum + price, 0);
+    //   discount = Math.max(0, first6Original - 79000);
+    //   discountLabel =
+    //     qtyTotal === 6
+    //       ? "Combo healthy 6 ly = 79K"
+    //       : `Combo healthy 6 ly = 79K + ${remaining.length} ly tính thêm`;
+    // } else && qtyTotal <= 5
+    if (qtyTotal >= 3 ) {
       discount = 5000;
       discountLabel = "Combo 3-5 ly giảm 5K";
     }
@@ -1227,7 +1228,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="mt-10 grid gap-5 md:grid-cols-3">
+        <section className="mt-10 grid gap-5 md:grid-cols-2">
           <img
             src={freeShipImg}
             alt="Free ship"
@@ -1238,11 +1239,11 @@ export default function App() {
             alt="Combo tiết kiệm"
             className="h-full w-full rounded-[2rem] object-contain shadow-lg"
           />
-          <img
+          {/* <img
             src={comboHealthyImg}
             alt="Combo healthy"
             className="h-full w-full rounded-[2rem] object-contain shadow-lg"
-          />
+          /> */}
         </section>
 
         <section id="order" className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_.9fr]">
@@ -1519,8 +1520,9 @@ export default function App() {
             </div>
 
             <div className="mt-5 rounded-2xl border border-dashed border-green-500 p-4 text-sm font-semibold text-slate-700">
-              Combo: 3 ly bất kỳ giảm 5K. 5 ly bất kỳ free ship. Combo healthy
-              6 ly bất kỳ chỉ 79K.
+              Combo: 3 ly bất kỳ giảm 5K. 5 ly bất kỳ free ship. 
+              {/* Combo healthy
+              6 ly bất kỳ chỉ 79K. */}
             </div>
           </aside>
         </section>
