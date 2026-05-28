@@ -412,7 +412,7 @@ export default function App() {
             price: Number(data.price || 0),
             desc: data.desc || "",
             inStock: data.inStock !== false,
-            image: productImages[data.imageKey] || productImages[item.id] || camImg,
+            image: productImages[data.imageKey] || productImages[item.id] || '',
             imageKey: data.imageKey || item.id,
           };
         });
