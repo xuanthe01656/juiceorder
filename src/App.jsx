@@ -23,6 +23,7 @@ import oiImg from "./assets/images/product_oi.png";
 import caRotImg from "./assets/images/product_ca_rot.png";
 import taoImg from "./assets/images/product_tao.png";
 import camImg from "./assets/images/product_cam.png";
+import cocImg from "./assets/images/product_coc.png";
 import miaImg from "./assets/images/product_mia.png";
 import rauMaImg from "./assets/images/product_rau_ma.png";
 import cafeMuoiImg from "./assets/images/product_cafe_muoi.png";
@@ -54,6 +55,7 @@ const productImages = {
   "ca-rot": caRotImg,
   tao: taoImg,
   cam: camImg,
+  coc: cocImg,
   mia: miaImg,
   rauma: rauMaImg,
   cafe1: cafeMuoiImg,
