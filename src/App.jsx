@@ -18,6 +18,7 @@ import { db } from "./firebase";
 import heroBanner from "./assets/images/hero_banner.png";
 import duaHauImg from "./assets/images/product_dua_hau.png";
 import caChuaImg from "./assets/images/product_ca_chua.png";
+import chanhImg from "./assets/images/product_chanh.png";
 import thomImg from "./assets/images/product_thom.png";
 import oiImg from "./assets/images/product_oi.png";
 import caRotImg from "./assets/images/product_ca_rot.png";
@@ -26,6 +27,7 @@ import camImg from "./assets/images/product_cam.png";
 import cocImg from "./assets/images/product_coc.png";
 import miaImg from "./assets/images/product_mia.png";
 import rauMaImg from "./assets/images/product_rau_ma.png";
+
 import cafeMuoiImg from "./assets/images/product_cafe_muoi.png";
 import cafeDenImg from "./assets/images/product_cafe_den.png";
 import cafeSuaImg from "./assets/images/product_cafe_sua.png";
@@ -50,6 +52,7 @@ const CANCEL_LIMIT_MS = 5 * 60 * 1000;
 const productImages = {
   "dua-hau": duaHauImg,
   "ca-chua": caChuaImg,
+  chanh: chanhImg,
   thom: thomImg,
   oi: oiImg,
   "ca-rot": caRotImg,
