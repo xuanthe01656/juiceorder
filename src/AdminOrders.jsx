@@ -688,9 +688,6 @@ export default function AdminOrders() {
               {/* Khối 3: Tùy chọn khẩu vị & Ghi chú */}
               <div className="rounded-2xl border border-green-100 bg-green-50/40 p-4">
                 <h4 className="mb-2 text-xs font-black tracking-wider text-green-900 uppercase">Tùy chọn khẩu vị & Ghi chú</h4>
-                <div className="mb-2 grid grid-cols-2 gap-2 border-b border-green-100/60 pb-2 text-sm">
-                  <p>Đá: <b className="text-green-800">{selectedOrder.options?.ice || "Bình thường"}</b></p>
-                </div>
                 <p className="text-sm">
                   Ghi chú:{" "}
                   <span className={`font-medium ${selectedOrder.note ? "rounded bg-yellow-100 px-1.5 py-0.5 text-slate-900" : "italic text-slate-400"}`}>
@@ -705,7 +702,7 @@ export default function AdminOrders() {
                 <div className="max-h-60 space-y-2.5 overflow-y-auto pr-1">
                   {(selectedOrder.items || []).map((item, idx) => (
                     <div
-                      key={item.id || idx}
+                      key={item.lineId || `${item.id}-${idx}`}
                       className="flex items-start justify-between rounded-xl border border-slate-100 bg-slate-50 p-3"
                     >
                       <div>
@@ -713,10 +710,15 @@ export default function AdminOrders() {
                         <p className="mt-0.5 text-xs text-slate-500">
                           {item.qty} ly x {formatMoney(item.finalPrice || item.price)}
                         </p>
+                        {item.sweetenerType && item.sweetenerType !== "none" && (
+                          <p className="text-xs text-slate-500">
+                            {item.sweetenerType === "milk"
+                              ? `Sữa: ${item.milk || "Bình thường"} (+2k/ly)`
+                              : `Đường: ${item.sugar || "Bình thường"}`}
+                          </p>
+                        )}
                         <p className="text-xs text-slate-500">
-                          {item.sweetenerType === "milk"
-                            ? `Sữa: ${item.milk || "Bình thường"} (+2k/ly)`
-                            : `Đường: ${item.sugar || "Bình thường"}`}
+                          Đá: {item.ice || "Bình thường"}
                         </p>
                       </div>
                       <b className="text-sm text-slate-900">{formatMoney(item.total)}</b>

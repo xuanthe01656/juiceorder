@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"; 
+import toast, { Toaster } from "react-hot-toast";
 import {
   addDoc,
   collection,
@@ -75,7 +76,6 @@ const defaultForm = {
   name: "",
   phone: "",
   address: "",
-  ice: "Bình thường",
   note: "",
 };
 
@@ -205,8 +205,18 @@ const searchAddressApi = async (keyword) => {
     lon: Number(item.lon),
   }));
 };
+const generateId = () => {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  return (
+    Date.now().toString(36) +
+    Math.random().toString(36).substring(2, 10)
+  );
+};
 export default function App() {
-  const [cart, setCart] = useState({});
+  const [cartItems, setCartItems] = useState([]);
   const [productOptions, setProductOptions] = useState({});
   const [form, setForm] = useState(defaultForm);
   const [copied, setCopied] = useState(false);
@@ -248,6 +258,7 @@ export default function App() {
         sweetenerType: "sugar",
         sugar: "Bình thường",
         milk: "Bình thường",
+        ice: "Bình thường",
       }
     );
   };
@@ -261,6 +272,109 @@ export default function App() {
       },
     }));
 
+    setCopied(false);
+  };
+  const scrollToOrder = () => {
+    const orderSection = document.getElementById("order");
+  
+    if (orderSection) {
+      orderSection.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  };
+  const addProductToCart = (product) => {
+    if (!product || product.inStock === false) {
+      alert("Món này hiện đã hết hàng.");
+      return;
+    }
+  
+    const isCoffee = isCoffeeProduct(product.id);
+  
+    const option = isCoffee
+      ? {
+          sweetenerType: "none",
+          sugar: "",
+          milk: "",
+          ice: getProductOption(product.id).ice || "Bình thường",
+        }
+      : getProductOption(product.id);
+  
+    const milkSurcharge =
+      !isCoffee && option.sweetenerType === "milk" ? 2000 : 0;
+  
+    const finalPrice = product.price + milkSurcharge;
+  
+    const cartLine = {
+      lineId: generateId(),
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      inStock: product.inStock,
+      qty: 1,
+      option,
+      milkSurcharge,
+      finalPrice,
+      baseTotal: product.price,
+      milkSurchargeTotal: milkSurcharge,
+      total: finalPrice,
+    };
+  
+    setCartItems((prev) => {
+      const sameIndex = prev.findIndex((item) => {
+        return (
+          item.id === cartLine.id &&
+          item.finalPrice === cartLine.finalPrice &&
+          item.option?.sweetenerType === cartLine.option?.sweetenerType &&
+          item.option?.sugar === cartLine.option?.sugar &&
+          item.option?.milk === cartLine.option?.milk &&
+          item.option?.ice === cartLine.option?.ice
+        );
+      });
+    
+      if (sameIndex === -1) {
+        return [...prev, cartLine];
+      }
+    
+      return prev.map((item, index) =>
+        index === sameIndex
+          ? {
+              ...item,
+              qty: item.qty + 1,
+            }
+          : item
+      );
+    });
+    
+    toast.custom(
+      (t) => (
+        <div
+          className={`rounded-2xl bg-white p-4 shadow-xl ring-1 ring-green-100 transition ${
+            t.visible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+          }`}
+        >
+          <p className="font-black text-[#0b6b2b]">
+            Đã thêm {product.name} vào đơn
+          </p>
+    
+          <button
+            type="button"
+            onClick={() => {
+              toast.dismiss(t.id);
+              scrollToOrder();
+            }}
+            className="mt-3 w-full rounded-xl bg-[#0b6b2b] px-4 py-2 text-sm font-black text-white hover:bg-green-800"
+          >
+            Xem đơn hàng
+          </button>
+        </div>
+      ),
+      {
+        duration: 2500,
+      }
+    );
     setCopied(false);
   };
   // 2. Hàm xử lý gửi đánh giá
@@ -292,29 +406,34 @@ export default function App() {
   };
 
   const order = useMemo(() => {
-    const items = products
-      .map((product) => {
-        const isCoffee = isCoffeeProduct(product.id);
-        const option = isCoffee
-          ? { sweetenerType: "none", sugar: "", milk: "" }
-          : getProductOption(product.id);
+    // const items = products
+    //   .map((product) => {
+    //     const isCoffee = isCoffeeProduct(product.id);
+    //     const option = isCoffee
+    //       ? { sweetenerType: "none", sugar: "", milk: "" }
+    //       : getProductOption(product.id);
 
-        const qty = cart[product.id] || 0;
-        const milkSurcharge = !isCoffee && option.sweetenerType === "milk" ? 2000 : 0;
+    //     const qty = cart[product.id] || 0;
+    //     const milkSurcharge = !isCoffee && option.sweetenerType === "milk" ? 2000 : 0;
 
-        return {
-          ...product,
-          qty,
-          option,
-          milkSurcharge,
-          finalPrice: product.price + milkSurcharge,
-          baseTotal: product.price * qty,
-          milkSurchargeTotal: milkSurcharge * qty,
-          total: (product.price + milkSurcharge) * qty,
-        };
-      })
-      .filter((item) => item.qty > 0);
-
+    //     return {
+    //       ...product,
+    //       qty,
+    //       option,
+    //       milkSurcharge,
+    //       finalPrice: product.price + milkSurcharge,
+    //       baseTotal: product.price * qty,
+    //       milkSurchargeTotal: milkSurcharge * qty,
+    //       total: (product.price + milkSurcharge) * qty,
+    //     };
+    //   })
+    //   .filter((item) => item.qty > 0);
+    const items = cartItems.map((item) => ({
+      ...item,
+      baseTotal: item.price * item.qty,
+      milkSurchargeTotal: item.milkSurcharge * item.qty,
+      total: item.finalPrice * item.qty,
+    }));
     const qtyTotal = items.reduce((sum, item) => sum + item.qty, 0);
     const subtotal = items.reduce((sum, item) => sum + item.baseTotal, 0);
 
@@ -336,7 +455,7 @@ export default function App() {
     // } else && qtyTotal <= 5
     if (qtyTotal >= 3 ) {
       discount = 5000;
-      discountLabel = "Combo 3-5 ly giảm 5K";
+      discountLabel = "Combo từ 3 ly giảm 5K";
     }
 
     let shipping = 0;
@@ -384,7 +503,7 @@ export default function App() {
       milkSurchargeTotal,
       total,
     };
-  }, [cart, deliveryInfo, products, productOptions]);
+  }, [cartItems, deliveryInfo]);
   useEffect(() => {
     const loadProducts = async () => {
       try {
@@ -428,55 +547,44 @@ export default function App() {
   
     loadProducts();
   }, []);
-  const changeQty = (productId, delta) => {
-    const product = products.find((item) => item.id === productId);
+  // const changeQty = (productId, delta) => {
+  //   const product = products.find((item) => item.id === productId);
   
-    if (delta > 0 && (!product || product.inStock === false)) {
-      alert("Món này hiện đã hết hàng.");
-      return;
-    }
+  //   if (delta > 0 && (!product || product.inStock === false)) {
+  //     alert("Món này hiện đã hết hàng.");
+  //     return;
+  //   }
   
-    setCart((prev) => {
-      const currentQty = prev[productId] || 0;
-      const nextQty = Math.max(0, currentQty + delta);
+  //   setCart((prev) => {
+  //     const currentQty = prev[productId] || 0;
+  //     const nextQty = Math.max(0, currentQty + delta);
   
-      if (nextQty === 0) {
-        const nextCart = { ...prev };
-        delete nextCart[productId];
-        return nextCart;
-      }
+  //     if (nextQty === 0) {
+  //       const nextCart = { ...prev };
+  //       delete nextCart[productId];
+  //       return nextCart;
+  //     }
   
-      return {
-        ...prev,
-        [productId]: nextQty,
-      };
-    });
+  //     return {
+  //       ...prev,
+  //       [productId]: nextQty,
+  //     };
+  //   });
   
-    setCopied(false);
-  };
+  //   setCopied(false);
+  // };
 
   const clearCart = () => {
-    setCart({});
+    setCartItems([]);
     setCopied(false);
     setProductOptions({});
   };
-  const removeCartItem = (productId) => {
-  setCart((prev) => {
-    const nextCart = { ...prev };
-    delete nextCart[productId];
-    return nextCart;
-  });
-
-  setProductOptions((prev) => {
-    const nextOptions = { ...prev };
-    delete nextOptions[productId];
-    return nextOptions;
-  });
-
-  setCopied(false);
-};
+  const removeCartItem = (lineId) => {
+    setCartItems((prev) => prev.filter((item) => item.lineId !== lineId));
+    setCopied(false);
+  };
   const resetOrderForm = () => {
-    setCart({});
+    setCartItems([]);
     setForm(defaultForm);
     setAddressKeyword("");
     setAddressSuggestions([]);
@@ -610,9 +718,11 @@ export default function App() {
             ? `Sữa: ${item.option.milk} (+2k/ly)`
             : `Đường: ${item.option.sugar}`;
 
-        return `${index + 1}. ${item.name}: ${item.qty} ly x ${formatMoney(
-          item.finalPrice
-        )} = ${formatMoney(item.total)}${sweetText ? ` (${sweetText})` : ""}`;
+            return `${index + 1}. ${item.name}: ${item.qty} ly x ${formatMoney(
+              item.finalPrice
+            )} = ${formatMoney(item.total)} (${
+              sweetText ? `${sweetText}, ` : ""
+            }Đá: ${item.option.ice || "Bình thường"})`;
       })
       .join("\n");
 
@@ -635,11 +745,10 @@ export default function App() {
           ? "Chưa xác định"
           : `${deliveryInfo.distanceKm.toFixed(2)}km từ quán`
       }
-      Đá: ${form.ice}
       Ghi chú: ${form.note.trim() || "Không có"}`;
   };
   const saveOrderToFirebase = async () => {
-    const cancelToken = crypto.randomUUID();
+    const cancelToken = generateId();
     const orderData = {
       customer: {
         name: form.name,
@@ -648,6 +757,7 @@ export default function App() {
       },
 
       items: order.items.map((item) => ({
+        lineId: item.lineId,
         id: item.id,
         name: item.name,
         qty: item.qty,
@@ -658,6 +768,7 @@ export default function App() {
         sweetenerType: item.option.sweetenerType,
         sugar: item.option.sweetenerType === "sugar" ? item.option.sugar : "",
         milk: item.option.sweetenerType === "milk" ? item.option.milk : "",
+        ice: item.option.ice || "Bình thường",
         inStockAtOrderTime: item.inStock !== false,
       })),
 
@@ -675,7 +786,6 @@ export default function App() {
       },
 
       options: {
-        ice: form.ice,
       },
 
       note: form.note,
@@ -940,6 +1050,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#fff7df] text-slate-900">
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 1800,
+          style: {
+            borderRadius: "16px",
+            fontWeight: "700",
+          },
+        }}
+      />
       <header className="relative overflow-hidden bg-gradient-to-br from-lime-100 via-yellow-50 to-orange-50">
         <div className="absolute -left-16 top-10 h-56 w-56 rounded-full bg-orange-200/60 blur-3xl" />
         <div className="absolute -right-16 bottom-10 h-56 w-56 rounded-full bg-lime-200/70 blur-3xl" />
@@ -1125,33 +1245,7 @@ export default function App() {
                     {formatMoney(product.price).replace("đ", "")}/LY
                   </div>
 
-                  <div className="mt-4 flex items-center justify-center gap-2">
-                    {product.inStock === false && (
-                      <div className="mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-500">
-                        Hết hàng
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => changeQty(product.id, -1)}
-                      className="h-10 w-10 rounded-full bg-slate-100 text-xl font-black transition hover:bg-slate-200"
-                    >
-                      -
-                    </button>
-
-                    <span className="w-10 text-xl font-black">
-                      {cart[product.id] || 0}
-                    </span>
-
-                    <button
-                      type="button"
-                      disabled={product.inStock === false}
-                      onClick={() => changeQty(product.id, 1)}
-                      className="h-10 w-10 rounded-full bg-[#0b6b2b] text-xl font-black text-white transition enabled:hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      +
-                    </button>
-                  </div>
+                  
                   {!isCoffeeProduct(product.id) && (
                   <div className="mt-4 rounded-2xl bg-green-50 p-3 text-left">
                     <p className="mb-2 text-sm font-black text-[#0b6b2b]">
@@ -1214,8 +1308,69 @@ export default function App() {
                         <option>Nhiều sữa</option>
                       </select>
                     )}
+                    
+                    <div className="mt-2">
+                      <p className="mb-1 text-xs font-black text-[#0b6b2b]">Đá</p>
+                      <select
+                        value={getProductOption(product.id).ice}
+                        onChange={(event) =>
+                          updateProductOption(product.id, "ice", event.target.value)
+                        }
+                        className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                      >
+                        <option>Bình thường</option>
+                        <option>Ít đá</option>
+                        <option>Không đá</option>
+                      </select>
+                    </div>
+                    <div className="mt-4">
+                      {product.inStock === false ? (
+                        <div className="rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-500">
+                          Hết hàng
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => addProductToCart(product)}
+                          className="w-full rounded-2xl bg-[#0b6b2b] px-5 py-3 font-black uppercase text-white transition hover:bg-green-800"
+                        >
+                          Thêm vào đơn
+                        </button>
+                      )}
+                    </div>
                   </div>
                   )}
+                  {isCoffeeProduct(product.id) && (
+                      <div className="mt-4 rounded-2xl bg-green-50 p-3 text-left">
+                        <p className="mb-1 text-sm font-black text-[#0b6b2b]">Đá</p>
+                        <select
+                          value={getProductOption(product.id).ice}
+                          onChange={(event) =>
+                            updateProductOption(product.id, "ice", event.target.value)
+                          }
+                          className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+                        >
+                          <option>Bình thường</option>
+                          <option>Ít đá</option>
+                          <option>Không đá</option>
+                        </select>
+                        <div className="mt-4">
+                          {product.inStock === false ? (
+                            <div className="rounded-xl bg-red-50 px-4 py-2 text-sm font-black text-red-500">
+                              Hết hàng
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => addProductToCart(product)}
+                              className="w-full rounded-2xl bg-[#0b6b2b] px-5 py-3 font-black uppercase text-white transition hover:bg-green-800"
+                            >
+                              Thêm vào đơn
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                 </div>
                 
               </article>
@@ -1360,18 +1515,6 @@ export default function App() {
               )}
             </div>
             <div className="mt-4">
-              <label className="mb-1 block font-bold">Đá</label>
-              <select
-                value={form.ice}
-                onChange={(event) => updateForm("ice", event.target.value)}
-                className="w-full rounded-2xl border px-4 py-3 outline-none transition focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
-              >
-                <option>Bình thường</option>
-                <option>Ít đá</option>
-                <option>Không đá</option>
-              </select>
-            </div>
-            <div className="mt-4">
               <label className="mb-1 block font-bold">Ghi chú</label>
               <textarea
                 value={form.note}
@@ -1441,12 +1584,12 @@ export default function App() {
             <div className="mt-5 space-y-3">
               {!order.items.length ? (
                 <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
-                  Chưa có món nào. Hãy bấm dấu + ở menu.
+                  Chưa có món nào. Hãy bấm “Thêm vào đơn” ở menu.
                 </p>
               ) : (
                 order.items.map((item) => (
                   <div
-                    key={item.id}
+                  key={item.lineId}
                     className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                   >
                     <img
@@ -1464,6 +1607,9 @@ export default function App() {
                             : `Đường: ${item.option.sugar}`}
                         </p>
                       )}
+                      <p className="text-xs text-slate-500">
+                        Đá: {item.option.ice || "Bình thường"}
+                      </p>
                       <p className="text-sm text-slate-500">
                         {item.qty} ly x {formatMoney(item.finalPrice)}
                       </p>
@@ -1476,7 +1622,7 @@ export default function App() {
 
                       <button
                         type="button"
-                        onClick={() => removeCartItem(item.id)}
+                        onClick={() => removeCartItem(item.lineId)}
                         className="rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-500 hover:bg-red-100"
                       >
                         Xóa
@@ -1697,9 +1843,9 @@ export default function App() {
             </div>
 
             <div className="mt-5 space-y-3">
-              {(searchedOrder.items || []).map((item) => (
+              {(searchedOrder.items || []).map((item, index) => (
                 <div
-                  key={item.id}
+                  key={item.lineId || `${item.id}-${index}`}
                   className="flex items-center justify-between rounded-2xl bg-slate-50 p-4"
                 >
                   <div>
@@ -1714,6 +1860,9 @@ export default function App() {
                             : `Đường: ${item.sugar || "Bình thường"}`}
                         </p>
                       )}
+                      <p className="text-xs text-slate-500">
+                        Đá: {item.ice || "Bình thường"}
+                      </p>
                   </div>
                   <b>{formatMoney(item.total)}</b>
                 </div>
@@ -1721,9 +1870,6 @@ export default function App() {
             </div>
 
             <div className="mt-5 rounded-2xl border border-dashed border-green-300 p-4 text-sm text-slate-600">
-              <p>
-                Đá: <b>{searchedOrder.options?.ice}</b>
-              </p>
               <p>
                 Ghi chú: <b>{searchedOrder.note || "Không có"}</b>
               </p>
@@ -1765,5 +1911,6 @@ export default function App() {
         </div>
       )}
     </div>
+    
   );
 }
