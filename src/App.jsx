@@ -242,6 +242,7 @@ export default function App() {
   const [reviews, setReviews] = useState([]);
   const [reviewForm, setReviewForm] = useState({ name: "", rating: 5, comment: "" });
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [openedProductPopup, setOpenedProductPopup] = useState(null);
   // 1. Lắng nghe danh sách đánh giá từ Firebase
   useEffect(() => {
     const q = query(collection(db, "reviews"), orderBy("createdAtMillis", "desc"));
@@ -283,6 +284,19 @@ export default function App() {
         block: "start",
       });
     }
+  };
+  const getProductCartQty = (productId) => {
+    return cartItems
+      .filter(item => item.id === productId)
+      .reduce((sum, item) => sum + item.qty, 0);
+  };
+  const getProductCartItems = (productId) => {
+    return cartItems.filter(item => item.id === productId);
+  };
+  const getProductCartTotal = (productId) => {
+    return cartItems
+      .filter((item) => item.id === productId)
+      .reduce((sum, item) => sum + item.finalPrice * item.qty, 0);
   };
   const addProductToCart = (product) => {
     if (!product || product.inStock === false) {
@@ -580,7 +594,21 @@ export default function App() {
     setProductOptions({});
   };
   const removeCartItem = (lineId) => {
-    setCartItems((prev) => prev.filter((item) => item.lineId !== lineId));
+    setCartItems((prev) => {
+      const removedItem = prev.find((item) => item.lineId === lineId);
+      const next = prev.filter((item) => item.lineId !== lineId);
+  
+      if (
+        removedItem &&
+        openedProductPopup === removedItem.id &&
+        !next.some((item) => item.id === removedItem.id)
+      ) {
+        setOpenedProductPopup(null);
+      }
+  
+      return next;
+    });
+  
     setCopied(false);
   };
   const resetOrderForm = () => {
@@ -1221,9 +1249,61 @@ export default function App() {
             products.map((product) => (
               <article
                 key={product.id}
-                className="overflow-hidden rounded-[2rem] bg-white shadow-lg transition hover:-translate-y-1 hover:shadow-xl"
+                className="relative overflow-visible rounded-[2rem] bg-white shadow-lg transition hover:-translate-y-1 hover:shadow-xl"
               >
-                <div className="bg-orange-50 p-3">
+                {getProductCartQty(product.id) > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenedProductPopup(
+                        openedProductPopup === product.id
+                          ? null
+                          : product.id
+                      )
+                    }
+                    className="absolute right-3 top-3 z-20 flex min-w-[64px] items-center justify-center rounded-2xl bg-red-500 px-3 py-2 text-xs font-black text-white shadow-xl">
+                      <div className="flex flex-col items-center leading-none">
+                        <span>{getProductCartQty(product.id)} ly</span>
+                        <span className="mt-0.5 text-[10px]">
+                          {formatMoney(getProductCartTotal(product.id))}
+                        </span>
+                      </div>
+                  </button>
+                )}
+                {openedProductPopup === product.id && (
+                  <div className="fixed bottom-4 left-4 right-4 z-50 rounded-2xl bg-white p-3 shadow-2xl ring-1 ring-slate-200 md:absolute md:bottom-auto md:left-auto md:right-3 md:top-14 md:z-30 md:w-72">
+                    <div className="mb-2 border-b pb-2">
+                      <h4 className="font-black text-[#0b6b2b]">
+                        {product.name}
+                      </h4>
+                      <p className="mt-1 text-sm font-black text-orange-500">
+                        Tổng: {formatMoney(getProductCartTotal(product.id))}
+                      </p>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto">
+                      {getProductCartItems(product.id).map((item) => (
+                        <div key={item.lineId} className="mb-2 flex items-start justify-between rounded-xl bg-slate-50 p-2">
+                          <div className="pr-2 text-xs">
+                            <p className="font-bold">{item.qty} ly</p>
+                            {item.option.sweetenerType !== "none" && (
+                              <p>
+                                {item.option.sweetenerType === "milk"
+                                  ? `Sữa: ${item.option.milk}`
+                                  : `Đường: ${item.option.sugar}`}
+                              </p>
+                            )}
+                            <p>Đá: {item.option.ice}</p>
+                          </div>
+                          <button type="button" onClick={() => removeCartItem(item.lineId) } className="rounded-lg bg-red-50 px-2 py-1 text-xs font-bold text-red-500">
+                            Xóa
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="overflow-hidden rounded-t-[2rem] bg-orange-50 p-3">
                   <img
                     src={product.image}
                     alt={product.name}
