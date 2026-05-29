@@ -73,6 +73,8 @@ export default function AdminOrders() {
     price: "",
     desc: "",
     sortOrder: "",
+    relatedIds: "",
+    isBestSeller: false,
   });
   const [productsLoading, setProductsLoading] = useState(false);
   const [updatingProductId, setUpdatingProductId] = useState("");
@@ -107,6 +109,11 @@ export default function AdminOrders() {
         desc: productForm.desc.trim(),
         imageKey: productId,
         sortOrder: Number(productForm.sortOrder || products.length + 1),
+        relatedIds: productForm.relatedIds
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        isBestSeller: productForm.isBestSeller === true,
         inStock: true,
         active: true,
         updatedAtMillis: Date.now(),
@@ -118,6 +125,8 @@ export default function AdminOrders() {
         price: "",
         desc: "",
         sortOrder: "",
+        relatedIds: "",
+        isBestSeller: false,
       });
   
       alert("Đã lưu sản phẩm.");
@@ -232,6 +241,24 @@ export default function AdminOrders() {
       setUpdatingProductId("");
     }
   };
+
+  const toggleProductBestSeller = async (product) => {
+    if (updatingProductId) return;
+
+    try {
+      setUpdatingProductId(product.id);
+
+      await updateDoc(doc(db, "products", product.id), {
+        isBestSeller: product.isBestSeller !== true,
+        updatedAtMillis: Date.now(),
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Không thể cập nhật món bán chạy.");
+    } finally {
+      setUpdatingProductId("");
+    }
+  };
   const playNotifySound = async () => {
     try {
       if (!notifyAudioRef.current) return;
@@ -297,6 +324,32 @@ export default function AdminOrders() {
       month: calc(getMonthStart()),
       pending: orders.filter((item) => item.status === "pending").length,
     };
+  }, [orders]);
+
+  const topProducts = useMemo(() => {
+    const productMap = new Map();
+
+    orders
+      .filter((order) => order.status !== "cancelled")
+      .forEach((order) => {
+        (order.items || []).forEach((item) => {
+          const key = item.id || item.name;
+          const current = productMap.get(key) || {
+            id: key,
+            name: item.name || "Không rõ món",
+            qty: 0,
+            revenue: 0,
+          };
+
+          current.qty += Number(item.qty || 0);
+          current.revenue += Number(item.total || 0);
+          productMap.set(key, current);
+        });
+      });
+
+    return Array.from(productMap.values())
+      .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+      .slice(0, 5);
   }, [orders]);
 
   if (!user) {
@@ -430,6 +483,47 @@ export default function AdminOrders() {
             </div>
           ))}
         </section>
+
+        <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-[#0b6b2b]">
+                Top món bán chạy
+              </h2>
+              <p className="text-sm text-slate-500">
+                Tính theo tổng số ly của các đơn chưa hủy.
+              </p>
+            </div>
+          </div>
+
+          {topProducts.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-5">
+              {topProducts.map((product, index) => (
+                <div
+                  key={product.id}
+                  className="rounded-2xl bg-orange-50 p-4 shadow-sm ring-1 ring-orange-100"
+                >
+                  <p className="text-xs font-black uppercase text-orange-500">
+                    #{index + 1}
+                  </p>
+                  <h3 className="mt-1 truncate font-black text-[#0b6b2b]">
+                    {product.name}
+                  </h3>
+                  <p className="mt-2 text-2xl font-black text-orange-500">
+                    {product.qty} ly
+                  </p>
+                  <p className="text-sm font-bold text-slate-500">
+                    {formatMoney(product.revenue)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
+              Chưa có dữ liệu bán hàng.
+            </p>
+          )}
+        </section>
         <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
           <div className="mb-5">
             <h2 className="text-2xl font-black text-[#0b6b2b]">
@@ -479,6 +573,29 @@ export default function AdminOrders() {
               placeholder="Mô tả"
             />
 
+            <input
+              value={productForm.relatedIds}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, relatedIds: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Mua kèm: cam,oi"
+            />
+
+            <label className="flex items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-black text-orange-500 ring-1 ring-orange-100">
+              <input
+                type="checkbox"
+                checked={productForm.isBestSeller}
+                onChange={(e) =>
+                  setProductForm((prev) => ({
+                    ...prev,
+                    isBestSeller: e.target.checked,
+                  }))
+                }
+              />
+              Bán chạy
+            </label>
+
             <button
               type="submit"
               disabled={productSaving}
@@ -496,7 +613,7 @@ export default function AdminOrders() {
                   key={product.id}
                   className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="font-black text-[#0b6b2b]">
                         {product.name}
@@ -521,6 +638,18 @@ export default function AdminOrders() {
                         : product.inStock === false
                         ? "Hết hàng"
                         : "Còn hàng"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={updatingProductId === product.id}
+                      onClick={() => toggleProductBestSeller(product)}
+                      className={`rounded-xl px-4 py-2 text-sm font-black disabled:opacity-60 ${
+                        product.isBestSeller === true
+                          ? "bg-orange-500 text-white"
+                          : "bg-white text-orange-500"
+                      }`}
+                    >
+                      {product.isBestSeller === true ? "🔥 Bán chạy" : "Đặt bán chạy"}
                     </button>
                     <button
                       type="button"
@@ -710,11 +839,10 @@ export default function AdminOrders() {
                         <p className="mt-0.5 text-xs text-slate-500">
                           {item.qty} ly x {formatMoney(item.finalPrice || item.price)}
                         </p>
-                        {item.sweetenerType && item.sweetenerType !== "none" && (
+                        {item.sweetness && (
                           <p className="text-xs text-slate-500">
-                            {item.sweetenerType === "milk"
-                              ? `Sữa: ${item.milk || "Bình thường"} (+2k/ly)`
-                              : `Đường: ${item.sugar || "Bình thường"}`}
+                            {item.sweetness}
+                            {item.sweetness.startsWith("Sữa") ? " (+2k/ly)" : ""}
                           </p>
                         )}
                         <p className="text-xs text-slate-500">
