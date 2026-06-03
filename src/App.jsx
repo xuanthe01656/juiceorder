@@ -28,6 +28,9 @@ import cocImg from "./assets/images/product_coc.png";
 import miaImg from "./assets/images/product_mia.png";
 import rauMaImg from "./assets/images/product_rau_ma.png";
 import duaLuoiImg from "./assets/images/product_dua_luoi.png";
+import manImg from "./assets/images/product_man.png";
+import traTacImg from "./assets/images/product_tra_tac.png";
+import traThaiXanhImg from "./assets/images/product_tra_thai_xanh.png";
 
 import cafeMuoiImg from "./assets/images/product_cafe_muoi.png";
 import cafeDenImg from "./assets/images/product_cafe_den.png";
@@ -67,6 +70,9 @@ const productImages = {
   "cafe3": cafeSuaImg,
   "cafe4": bacXiuImg,
   "dua-luoi": duaLuoiImg,
+  "man": manImg,
+  "tra-tac": traTacImg,
+  "tra-thai-xanh": traThaiXanhImg,
 };
 const COFFEE_PRODUCT_IDS = ["cafe1", "cafe2", "cafe3", "cafe4", "mia"];
 
