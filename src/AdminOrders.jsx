@@ -226,12 +226,15 @@ export default function AdminOrders() {
   }, [user]);
   const toggleProductStock = async (product) => {
     if (updatingProductId) return;
-  
+
+    const nextInStock = product.inStock === false;
+
     try {
       setUpdatingProductId(product.id);
-  
+
       await updateDoc(doc(db, "products", product.id), {
-        inStock: product.inStock === false,
+        inStock: nextInStock,
+        active: nextInStock ? true : product.active !== false,
         updatedAtMillis: Date.now(),
       });
     } catch (error) {
@@ -628,13 +631,17 @@ export default function AdminOrders() {
                       disabled={updatingProductId === product.id}
                       onClick={() => toggleProductStock(product)}
                       className={`rounded-xl px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 ${
-                        product.inStock === false
+                        product.active === false
+                          ? "bg-blue-500"
+                          : product.inStock === false
                           ? "bg-red-500"
                           : "bg-[#0b6b2b]"
                       }`}
                     >
                       {updatingProductId === product.id
                         ? "Đang lưu..."
+                        : product.active === false
+                        ? "Mở lại món"
                         : product.inStock === false
                         ? "Hết hàng"
                         : "Còn hàng"}
@@ -842,7 +849,7 @@ export default function AdminOrders() {
                         {item.sweetness && (
                           <p className="text-xs text-slate-500">
                             {item.sweetness}
-                            {item.sweetness.startsWith("Sữa") ? " (+2k/ly)" : ""}
+                            {item.milkSurcharge > 0 ? " (+2k/ly)" : ""}
                           </p>
                         )}
                         <p className="text-xs text-slate-500">
