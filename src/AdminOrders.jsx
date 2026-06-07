@@ -76,6 +76,7 @@ export default function AdminOrders() {
     relatedIds: "",
     isBestSeller: false,
   });
+  const [editingPrices, setEditingPrices] = useState({});
   const [productsLoading, setProductsLoading] = useState(false);
   const [updatingProductId, setUpdatingProductId] = useState("");
   const saveProduct = async (event) => {
@@ -150,6 +151,7 @@ export default function AdminOrders() {
         inStock: false,
         updatedAtMillis: Date.now(),
       });
+
     } catch (error) {
       console.error(error);
       alert("Không thể ẩn sản phẩm.");
@@ -258,6 +260,42 @@ export default function AdminOrders() {
     } catch (error) {
       console.error(error);
       alert("Không thể cập nhật món bán chạy.");
+    } finally {
+      setUpdatingProductId("");
+    }
+  };
+  const updateProductPrice = async (product) => {
+    if (updatingProductId) return;
+
+    const rawPrice = editingPrices[product.id];
+
+    if (!rawPrice) {
+      alert("Vui lòng nhập giá mới.");
+      return;
+    }
+
+    const newPrice = Number(rawPrice);
+
+    if (!newPrice || newPrice <= 0) {
+      alert("Giá không hợp lệ.");
+      return;
+    }
+
+    try {
+      setUpdatingProductId(product.id);
+
+      await updateDoc(doc(db, "products", product.id), {
+        price: newPrice,
+        updatedAtMillis: Date.now(),
+      });
+      alert("Đã cập nhật giá.");
+      setEditingPrices((prev) => ({
+        ...prev,
+        [product.id]: "",
+      }));
+    } catch (error) {
+      console.error(error);
+      alert("Không thể cập nhật giá.");
     } finally {
       setUpdatingProductId("");
     }
@@ -624,6 +662,29 @@ export default function AdminOrders() {
                       <p className="text-sm font-bold text-slate-500">
                         {formatMoney(product.price)}
                       </p>
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          value={editingPrices[product.id] ?? ""}
+                          onChange={(e) =>
+                            setEditingPrices((prev) => ({
+                              ...prev,
+                              [product.id]: e.target.value,
+                            }))
+                          }
+                          inputMode="numeric"
+                          placeholder="Giá mới"
+                          className="w-28 rounded-xl border px-3 py-2 text-sm outline-none"
+                        />
+
+                        <button
+                          type="button"
+                          disabled={updatingProductId === product.id}
+                          onClick={() => updateProductPrice(product)}
+                          className="rounded-xl bg-orange-500 px-3 py-2 text-sm font-black text-white disabled:opacity-60"
+                        >
+                          Lưu giá
+                        </button>
+                      </div>
                     </div>
 
                     <button
