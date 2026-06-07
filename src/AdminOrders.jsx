@@ -542,6 +542,116 @@ export default function AdminOrders() {
               {topProducts.map((product, index) => (
                 <div
                   key={product.id}
+                  className="rounded-2xl bg-orange-50 p-4 shadow-sm ring-1 ring-orange-100"
+                >
+                  <p className="text-xs font-black uppercase text-orange-500">
+                    #{index + 1}
+                  </p>
+                  <h3 className="mt-1 truncate font-black text-[#0b6b2b]">
+                    {product.name}
+                  </h3>
+                  <p className="mt-2 text-2xl font-black text-orange-500">
+                    {product.qty} ly
+                  </p>
+                  <p className="text-sm font-bold text-slate-500">
+                    {formatMoney(product.revenue)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
+              Chưa có dữ liệu bán hàng.
+            </p>
+          )}
+        </section>
+        <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
+          <div className="mb-5">
+            <h2 className="text-2xl font-black text-[#0b6b2b]">
+              Quản lý món bán
+            </h2>
+            <p className="text-sm text-slate-500">
+              Bật/tắt tình trạng còn hàng để khách không đặt nhầm.
+            </p>
+          </div>
+          <form
+            onSubmit={saveProduct}
+            className="mb-6 grid gap-3 rounded-2xl bg-green-50 p-4 lg:grid-cols-6"
+          >
+            <input
+              value={productForm.id}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, id: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="id: matcha"
+            />
+
+            <input
+              value={productForm.name}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, name: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Tên món"
+            />
+
+            <input
+              value={productForm.price}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, price: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Giá"
+              inputMode="numeric"
+            />
+            <input
+              value={productForm.desc}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, desc: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Mô tả"
+            />
+
+            <input
+              value={productForm.relatedIds}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, relatedIds: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Mua kèm: cam,oi"
+            />
+
+            <label className="flex items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-black text-orange-500 ring-1 ring-orange-100">
+              <input
+                type="checkbox"
+                checked={productForm.isBestSeller}
+                onChange={(e) =>
+                  setProductForm((prev) => ({
+                    ...prev,
+                    isBestSeller: e.target.checked,
+                  }))
+                }
+              />
+              Bán chạy
+            </label>
+
+            <button
+              type="submit"
+              disabled={productSaving}
+              className="rounded-xl bg-orange-500 px-4 py-2 font-black text-white disabled:opacity-60"
+            >
+              {productSaving ? "Đang lưu..." : "Thêm món"}
+            </button>
+          </form>
+          {productsLoading ? (
+            <p className="rounded-2xl bg-slate-50 p-4">Đang tải món...</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {products.map((product) => (
+                <div
+                  key={product.id}
                   className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -648,178 +758,6 @@ export default function AdminOrders() {
                       className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:opacity-60"
                     >
                       Ẩn món
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
-              Chưa có dữ liệu bán hàng.
-            </p>
-          )}
-        </section>
-        <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
-          <div className="mb-5">
-            <h2 className="text-2xl font-black text-[#0b6b2b]">
-              Quản lý món bán
-            </h2>
-            <p className="text-sm text-slate-500">
-              Bật/tắt tình trạng còn hàng để khách không đặt nhầm.
-            </p>
-          </div>
-          <form
-            onSubmit={saveProduct}
-            className="mb-6 grid gap-3 rounded-2xl bg-green-50 p-4 lg:grid-cols-6"
-          >
-            <input
-              value={productForm.id}
-              onChange={(e) =>
-                setProductForm((prev) => ({ ...prev, id: e.target.value }))
-              }
-              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
-              placeholder="id: matcha"
-            />
-
-            <input
-              value={productForm.name}
-              onChange={(e) =>
-                setProductForm((prev) => ({ ...prev, name: e.target.value }))
-              }
-              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
-              placeholder="Tên món"
-            />
-
-            <input
-              value={productForm.price}
-              onChange={(e) =>
-                setProductForm((prev) => ({ ...prev, price: e.target.value }))
-              }
-              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
-              placeholder="Giá"
-              inputMode="numeric"
-            />
-            <input
-              value={productForm.desc}
-              onChange={(e) =>
-                setProductForm((prev) => ({ ...prev, desc: e.target.value }))
-              }
-              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
-              placeholder="Mô tả"
-            />
-
-            <input
-              value={productForm.relatedIds}
-              onChange={(e) =>
-                setProductForm((prev) => ({ ...prev, relatedIds: e.target.value }))
-              }
-              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
-              placeholder="Mua kèm: cam,oi"
-            />
-
-            <label className="flex items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-black text-orange-500 ring-1 ring-orange-100">
-              <input
-                type="checkbox"
-                checked={productForm.isBestSeller}
-                onChange={(e) =>
-                  setProductForm((prev) => ({
-                    ...prev,
-                    isBestSeller: e.target.checked,
-                  }))
-                }
-              />
-              Bán chạy
-            </label>
-
-            <button
-              type="submit"
-              disabled={productSaving}
-              className="rounded-xl bg-orange-500 px-4 py-2 font-black text-white disabled:opacity-60"
-            >
-              {productSaving ? "Đang lưu..." : "Thêm món"}
-            </button>
-          </form>
-          {productsLoading ? (
-            <p className="rounded-2xl bg-slate-50 p-4">Đang tải món...</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {products.map((product) => (
-                <div
-                  key={product.id}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h3 className="font-black text-[#0b6b2b]">
-                        {product.name}
-                      </h3>
-                      <p className="text-sm font-bold text-slate-500">
-                        {formatMoney(product.price)}
-                      </p>
-                      <div className="mt-2 flex gap-2">
-                        <input
-                          value={editingPrices[product.id] ?? ""}
-                          onChange={(e) =>
-                            setEditingPrices((prev) => ({
-                              ...prev,
-                              [product.id]: e.target.value,
-                            }))
-                          }
-                          inputMode="numeric"
-                          placeholder="Giá mới"
-                          className="w-28 rounded-xl border px-3 py-2 text-sm outline-none"
-                        />
-
-                        <button
-                          type="button"
-                          disabled={updatingProductId === product.id}
-                          onClick={() => updateProductPrice(product)}
-                          className="rounded-xl bg-orange-500 px-3 py-2 text-sm font-black text-white disabled:opacity-60"
-                        >
-                          Lưu giá
-                        </button>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={updatingProductId === product.id}
-                      onClick={() => toggleProductStock(product)}
-                      className={`rounded-xl px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 ${
-                        product.active === false
-                          ? "bg-blue-500"
-                          : product.inStock === false
-                          ? "bg-red-500"
-                          : "bg-[#0b6b2b]"
-                      }`}
-                    >
-                      {updatingProductId === product.id
-                        ? "Đang lưu..."
-                        : product.active === false
-                        ? "Mở lại món"
-                        : product.inStock === false
-                        ? "Hết hàng"
-                        : "Còn hàng"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updatingProductId === product.id}
-                      onClick={() => toggleProductBestSeller(product)}
-                      className={`rounded-xl px-4 py-2 text-sm font-black disabled:opacity-60 ${
-                        product.isBestSeller === true
-                          ? "bg-orange-500 text-white"
-                          : "bg-white text-orange-500"
-                      }`}
-                    >
-                      {product.isBestSeller === true ? "🔥 Bán chạy" : "Đặt bán chạy"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={updatingProductId === product.id}
-                      onClick={() => hideProduct(product)}
-                      className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-black text-slate-700 disabled:opacity-60"
-                    >
-                      Ẩn
                     </button>
                   </div>
                 </div>
