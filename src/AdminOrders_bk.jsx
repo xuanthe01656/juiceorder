@@ -73,7 +73,10 @@ export default function AdminOrders() {
     price: "",
     desc: "",
     sortOrder: "",
+    relatedIds: "",
+    isBestSeller: false,
   });
+  const [editingPrices, setEditingPrices] = useState({});
   const [productsLoading, setProductsLoading] = useState(false);
   const [updatingProductId, setUpdatingProductId] = useState("");
   const saveProduct = async (event) => {
@@ -107,6 +110,11 @@ export default function AdminOrders() {
         desc: productForm.desc.trim(),
         imageKey: productId,
         sortOrder: Number(productForm.sortOrder || products.length + 1),
+        relatedIds: productForm.relatedIds
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        isBestSeller: productForm.isBestSeller === true,
         inStock: true,
         active: true,
         updatedAtMillis: Date.now(),
@@ -118,6 +126,8 @@ export default function AdminOrders() {
         price: "",
         desc: "",
         sortOrder: "",
+        relatedIds: "",
+        isBestSeller: false,
       });
   
       alert("Đã lưu sản phẩm.");
@@ -141,6 +151,7 @@ export default function AdminOrders() {
         inStock: false,
         updatedAtMillis: Date.now(),
       });
+
     } catch (error) {
       console.error(error);
       alert("Không thể ẩn sản phẩm.");
@@ -217,17 +228,74 @@ export default function AdminOrders() {
   }, [user]);
   const toggleProductStock = async (product) => {
     if (updatingProductId) return;
-  
+
+    const nextInStock = product.inStock === false;
+
     try {
       setUpdatingProductId(product.id);
-  
+
       await updateDoc(doc(db, "products", product.id), {
-        inStock: product.inStock === false,
+        inStock: nextInStock,
+        active: nextInStock ? true : product.active !== false,
         updatedAtMillis: Date.now(),
       });
     } catch (error) {
       console.error(error);
       alert("Không thể cập nhật tình trạng món.");
+    } finally {
+      setUpdatingProductId("");
+    }
+  };
+
+  const toggleProductBestSeller = async (product) => {
+    if (updatingProductId) return;
+
+    try {
+      setUpdatingProductId(product.id);
+
+      await updateDoc(doc(db, "products", product.id), {
+        isBestSeller: product.isBestSeller !== true,
+        updatedAtMillis: Date.now(),
+      });
+    } catch (error) {
+      console.error(error);
+      alert("Không thể cập nhật món bán chạy.");
+    } finally {
+      setUpdatingProductId("");
+    }
+  };
+  const updateProductPrice = async (product) => {
+    if (updatingProductId) return;
+
+    const rawPrice = editingPrices[product.id];
+
+    if (!rawPrice) {
+      alert("Vui lòng nhập giá mới.");
+      return;
+    }
+
+    const newPrice = Number(rawPrice);
+
+    if (!newPrice || newPrice <= 0) {
+      alert("Giá không hợp lệ.");
+      return;
+    }
+
+    try {
+      setUpdatingProductId(product.id);
+
+      await updateDoc(doc(db, "products", product.id), {
+        price: newPrice,
+        updatedAtMillis: Date.now(),
+      });
+      alert("Đã cập nhật giá.");
+      setEditingPrices((prev) => ({
+        ...prev,
+        [product.id]: "",
+      }));
+    } catch (error) {
+      console.error(error);
+      alert("Không thể cập nhật giá.");
     } finally {
       setUpdatingProductId("");
     }
@@ -297,6 +365,32 @@ export default function AdminOrders() {
       month: calc(getMonthStart()),
       pending: orders.filter((item) => item.status === "pending").length,
     };
+  }, [orders]);
+
+  const topProducts = useMemo(() => {
+    const productMap = new Map();
+
+    orders
+      .filter((order) => order.status !== "cancelled")
+      .forEach((order) => {
+        (order.items || []).forEach((item) => {
+          const key = item.id || item.name;
+          const current = productMap.get(key) || {
+            id: key,
+            name: item.name || "Không rõ món",
+            qty: 0,
+            revenue: 0,
+          };
+
+          current.qty += Number(item.qty || 0);
+          current.revenue += Number(item.total || 0);
+          productMap.set(key, current);
+        });
+      });
+
+    return Array.from(productMap.values())
+      .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+      .slice(0, 5);
   }, [orders]);
 
   if (!user) {
@@ -430,6 +524,47 @@ export default function AdminOrders() {
             </div>
           ))}
         </section>
+
+        <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-[#0b6b2b]">
+                Top món bán chạy
+              </h2>
+              <p className="text-sm text-slate-500">
+                Tính theo tổng số ly của các đơn chưa hủy.
+              </p>
+            </div>
+          </div>
+
+          {topProducts.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-5">
+              {topProducts.map((product, index) => (
+                <div
+                  key={product.id}
+                  className="rounded-2xl bg-orange-50 p-4 shadow-sm ring-1 ring-orange-100"
+                >
+                  <p className="text-xs font-black uppercase text-orange-500">
+                    #{index + 1}
+                  </p>
+                  <h3 className="mt-1 truncate font-black text-[#0b6b2b]">
+                    {product.name}
+                  </h3>
+                  <p className="mt-2 text-2xl font-black text-orange-500">
+                    {product.qty} ly
+                  </p>
+                  <p className="text-sm font-bold text-slate-500">
+                    {formatMoney(product.revenue)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
+              Chưa có dữ liệu bán hàng.
+            </p>
+          )}
+        </section>
         <section className="mt-8 rounded-[2rem] bg-white p-5 shadow-xl">
           <div className="mb-5">
             <h2 className="text-2xl font-black text-[#0b6b2b]">
@@ -479,6 +614,29 @@ export default function AdminOrders() {
               placeholder="Mô tả"
             />
 
+            <input
+              value={productForm.relatedIds}
+              onChange={(e) =>
+                setProductForm((prev) => ({ ...prev, relatedIds: e.target.value }))
+              }
+              className="rounded-xl border px-3 py-2 outline-none lg:col-span-1"
+              placeholder="Mua kèm: cam,oi"
+            />
+
+            <label className="flex items-center justify-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-black text-orange-500 ring-1 ring-orange-100">
+              <input
+                type="checkbox"
+                checked={productForm.isBestSeller}
+                onChange={(e) =>
+                  setProductForm((prev) => ({
+                    ...prev,
+                    isBestSeller: e.target.checked,
+                  }))
+                }
+              />
+              Bán chạy
+            </label>
+
             <button
               type="submit"
               disabled={productSaving}
@@ -494,41 +652,112 @@ export default function AdminOrders() {
               {products.map((product) => (
                 <div
                   key={product.id}
-                  className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                  className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="font-black text-[#0b6b2b]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate text-lg font-black text-[#0b6b2b]">
                         {product.name}
                       </h3>
-                      <p className="text-sm font-bold text-slate-500">
+
+                      <p className="mt-1 text-sm font-bold text-slate-500">
+                        Giá hiện tại
+                      </p>
+
+                      <p className="text-2xl font-black text-orange-500">
                         {formatMoney(product.price)}
                       </p>
                     </div>
 
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                        product.active === false
+                          ? "bg-blue-50 text-blue-600"
+                          : product.inStock === false
+                          ? "bg-red-50 text-red-600"
+                          : "bg-green-50 text-[#0b6b2b]"
+                      }`}
+                    >
+                      {product.active === false
+                        ? "Đang ẩn"
+                        : product.inStock === false
+                        ? "Hết hàng"
+                        : "Còn hàng"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-3">
+                    <label className="mb-1 block text-xs font-black uppercase text-slate-500">
+                      Cập nhật giá
+                    </label>
+
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <input
+                        value={editingPrices[product.id] ?? ""}
+                        onChange={(e) =>
+                          setEditingPrices((prev) => ({
+                            ...prev,
+                            [product.id]: e.target.value,
+                          }))
+                        }
+                        inputMode="numeric"
+                        placeholder="Nhập giá mới"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      />
+
+                      <button
+                        type="button"
+                        disabled={updatingProductId === product.id}
+                        onClick={() => updateProductPrice(product)}
+                        className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-orange-600 disabled:opacity-60"
+                      >
+                        Lưu
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <button
                       type="button"
                       disabled={updatingProductId === product.id}
                       onClick={() => toggleProductStock(product)}
-                      className={`rounded-xl px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 ${
-                        product.inStock === false
-                          ? "bg-red-500"
-                          : "bg-[#0b6b2b]"
+                      className={`rounded-2xl px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60 ${
+                        product.active === false
+                          ? "bg-blue-500 hover:bg-blue-600"
+                          : product.inStock === false
+                          ? "bg-red-500 hover:bg-red-600"
+                          : "bg-[#0b6b2b] hover:bg-green-800"
                       }`}
                     >
                       {updatingProductId === product.id
                         ? "Đang lưu..."
+                        : product.active === false
+                        ? "Mở lại"
                         : product.inStock === false
                         ? "Hết hàng"
                         : "Còn hàng"}
                     </button>
+
+                    <button
+                      type="button"
+                      disabled={updatingProductId === product.id}
+                      onClick={() => toggleProductBestSeller(product)}
+                      className={`rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-60 ${
+                        product.isBestSeller === true
+                          ? "bg-orange-500 text-white hover:bg-orange-600"
+                          : "bg-orange-50 text-orange-600 hover:bg-orange-100"
+                      }`}
+                    >
+                      {product.isBestSeller === true ? "🔥 Bán chạy" : "Bán chạy"}
+                    </button>
+
                     <button
                       type="button"
                       disabled={updatingProductId === product.id}
                       onClick={() => hideProduct(product)}
-                      className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-black text-slate-700 disabled:opacity-60"
+                      className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 disabled:opacity-60"
                     >
-                      Ẩn
+                      Ẩn món
                     </button>
                   </div>
                 </div>
@@ -710,11 +939,10 @@ export default function AdminOrders() {
                         <p className="mt-0.5 text-xs text-slate-500">
                           {item.qty} ly x {formatMoney(item.finalPrice || item.price)}
                         </p>
-                        {item.sweetenerType && item.sweetenerType !== "none" && (
+                        {item.sweetness && (
                           <p className="text-xs text-slate-500">
-                            {item.sweetenerType === "milk"
-                              ? `Sữa: ${item.milk || "Bình thường"} (+2k/ly)`
-                              : `Đường: ${item.sugar || "Bình thường"}`}
+                            {item.sweetness}
+                            {item.milkSurcharge > 0 ? " (+2k/ly)" : ""}
                           </p>
                         )}
                         <p className="text-xs text-slate-500">
