@@ -28,6 +28,23 @@ const statusText = {
   cancelled: "Đã hủy",
 };
 
+const orderStatusPriority = {
+  pending: 1,
+  confirmed: 2,
+  delivering: 3,
+  completed: 4,
+  cancelled: 5,
+};
+
+const orderStatusFilters = [
+  { id: "all", label: "Tất cả" },
+  { id: "pending", label: "Chờ xác nhận" },
+  { id: "confirmed", label: "Đã xác nhận" },
+  { id: "delivering", label: "Đang giao" },
+  { id: "completed", label: "Hoàn thành" },
+  { id: "cancelled", label: "Đã hủy" },
+];
+
 const tabItems = [
   { id: "stats", label: "Thống kê", icon: "📊" },
   { id: "products", label: "Quản lý sản phẩm", icon: "🥤" },
@@ -64,6 +81,10 @@ const getProductStatus = (product) => {
 
 export default function AdminOrders() {
   const [activeTab, setActiveTab] = useState("stats");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [orderKeyword, setOrderKeyword] = useState("");
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPageSize, setOrderPageSize] = useState(10);
   const [user, setUser] = useState(null);
   const [loginForm, setLoginForm] = useState({
     email: "",
@@ -576,6 +597,87 @@ export default function AdminOrders() {
     };
   }, [orders, inventoryEntries, inventorySummary]);
 
+  const orderStatusCounts = useMemo(() => {
+    const counts = {
+      all: orders.length,
+      pending: 0,
+      confirmed: 0,
+      delivering: 0,
+      completed: 0,
+      cancelled: 0,
+    };
+
+    orders.forEach((order) => {
+      const status = order.status || "pending";
+      if (counts[status] !== undefined) {
+        counts[status] += 1;
+      }
+    });
+
+    return counts;
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    const keyword = orderKeyword.trim().toLowerCase();
+
+    return [...orders]
+      .filter((order) => {
+        if (orderStatusFilter !== "all" && order.status !== orderStatusFilter) {
+          return false;
+        }
+
+        if (!keyword) return true;
+
+        const searchableText = [
+          order.id,
+          order.status,
+          statusText[order.status],
+          order.customer?.name,
+          order.customer?.phone,
+          order.customer?.address,
+          order.note,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(keyword);
+      })
+      .sort((a, b) => {
+        const priorityA = orderStatusPriority[a.status] || 99;
+        const priorityB = orderStatusPriority[b.status] || 99;
+
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+
+        return Number(b.createdAtMillis || 0) - Number(a.createdAtMillis || 0);
+      });
+  }, [orders, orderKeyword, orderStatusFilter]);
+
+  const totalOrderPages = Math.max(
+    1,
+    Math.ceil(filteredOrders.length / Number(orderPageSize || 10))
+  );
+
+  const paginatedOrders = useMemo(() => {
+    const pageSize = Number(orderPageSize || 10);
+    const safePage = Math.min(orderPage, totalOrderPages);
+    const start = (safePage - 1) * pageSize;
+
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, orderPage, orderPageSize, totalOrderPages]);
+
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderKeyword, orderStatusFilter, orderPageSize]);
+
+  useEffect(() => {
+    if (orderPage > totalOrderPages) {
+      setOrderPage(totalOrderPages);
+    }
+  }, [orderPage, totalOrderPages]);
+
   if (!user) {
     return (
       <div className="min-h-screen bg-[#fff7df] px-4 py-10">
@@ -939,99 +1041,264 @@ export default function AdminOrders() {
     </section>
   );
 
-  const renderOrdersTab = () => (
-    <section className="rounded-[2rem] bg-white p-5 shadow-xl">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black text-[#0b6b2b]">
-            Danh sách đơn hàng
-          </h2>
-          <p className="text-sm text-slate-500">
-            Đơn mới sẽ tự hiện ở đầu danh sách.
-          </p>
+  const renderOrdersTab = () => {
+    const startItem = filteredOrders.length
+      ? (orderPage - 1) * Number(orderPageSize || 10) + 1
+      : 0;
+    const endItem = Math.min(
+      orderPage * Number(orderPageSize || 10),
+      filteredOrders.length
+    );
+
+    return (
+      <section className="rounded-[2rem] bg-white p-5 shadow-xl">
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#0b6b2b]">
+              Danh sách đơn hàng
+            </h2>
+            <p className="text-sm text-slate-500">
+              Ưu tiên hiển thị: Chờ xác nhận → Đã xác nhận → Đang giao → Hoàn thành → Đã hủy.
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-black text-orange-600">
+            {filteredOrders.length} / {orders.length} đơn
+          </div>
         </div>
-      </div>
 
-      {loading ? (
-        <p className="rounded-2xl bg-slate-50 p-4">Đang tải...</p>
-      ) : (
-        <div className="space-y-4">
-          {orders.map((order) => (
-            <div
-              key={order.id}
-              className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4"
+        <div className="mb-5 grid gap-3 rounded-2xl bg-slate-50 p-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <label className="mb-1 block text-xs font-black uppercase text-slate-500">
+              Tìm kiếm đơn hàng
+            </label>
+            <input
+              value={orderKeyword}
+              onChange={(event) => setOrderKeyword(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100"
+              placeholder="Tìm mã đơn, tên khách, SĐT, địa chỉ..."
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-black uppercase text-slate-500">
+              Số đơn / trang
+            </label>
+            <select
+              value={orderPageSize}
+              onChange={(event) => setOrderPageSize(Number(event.target.value))}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#0b6b2b] focus:ring-2 focus:ring-green-100 lg:w-40"
             >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase text-orange-500">
-                    {order.id}
-                  </p>
-                  <h3 className="text-xl font-black text-[#0b6b2b]">
-                    {order.customer?.name} - {order.customer?.phone}
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {order.customer?.address}
-                  </p>
-                  <p className="mt-1 text-sm font-bold">
-                    Tổng: {formatMoney(order.pricing?.total)}
-                  </p>
-                </div>
+              {[5, 10, 20, 50].map((size) => (
+                <option key={size} value={size}>
+                  {size} đơn
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {["pending", "confirmed", "delivering", "completed"].map(
-                    (status) => (
+        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          {orderStatusFilters.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              onClick={() => setOrderStatusFilter(filter.id)}
+              className={`shrink-0 rounded-2xl px-4 py-3 text-sm font-black transition ${
+                orderStatusFilter === filter.id
+                  ? "bg-[#0b6b2b] text-white shadow-md"
+                  : "bg-slate-50 text-slate-600 hover:bg-green-50 hover:text-[#0b6b2b]"
+              }`}
+            >
+              {filter.label}
+              <span className="ml-2 rounded-full bg-white/70 px-2 py-0.5 text-xs text-slate-700">
+                {orderStatusCounts[filter.id] || 0}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <p className="rounded-2xl bg-slate-50 p-4">Đang tải...</p>
+        ) : (
+          <>
+            <div className="space-y-4">
+              {paginatedOrders.map((order) => (
+                <div
+                  key={order.id}
+                  className={`rounded-[1.5rem] border p-4 transition hover:-translate-y-0.5 hover:shadow-lg ${
+                    order.status === "pending"
+                      ? "border-orange-200 bg-orange-50"
+                      : order.status === "confirmed"
+                      ? "border-green-200 bg-green-50"
+                      : order.status === "delivering"
+                      ? "border-blue-200 bg-blue-50"
+                      : order.status === "cancelled"
+                      ? "border-red-100 bg-red-50/60 opacity-80"
+                      : "border-slate-100 bg-slate-50"
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="break-all text-xs font-bold uppercase text-orange-500">
+                          {order.id}
+                        </p>
+
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${
+                            order.status === "pending"
+                              ? "bg-orange-500 text-white"
+                              : order.status === "confirmed"
+                              ? "bg-[#0b6b2b] text-white"
+                              : order.status === "delivering"
+                              ? "bg-blue-500 text-white"
+                              : order.status === "cancelled"
+                              ? "bg-red-500 text-white"
+                              : "bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {statusText[order.status] || order.status}
+                        </span>
+                      </div>
+
+                      <h3 className="mt-2 text-xl font-black text-[#0b6b2b]">
+                        {order.customer?.name} - {order.customer?.phone}
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {order.customer?.address}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-3 text-sm font-bold">
+                        <span>Tổng: {formatMoney(order.pricing?.total)}</span>
+                        <span>Số món: {(order.items || []).length}</span>
+                        <span>
+                          {order.createdAtMillis
+                            ? new Date(order.createdAtMillis).toLocaleString("vi-VN")
+                            : "Không rõ thời gian"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {["pending", "confirmed", "delivering", "completed"].map(
+                        (status) => (
+                          <button
+                            disabled={updatingOrderId === order.id}
+                            key={status}
+                            type="button"
+                            onClick={() => updateOrderStatus(order.id, status)}
+                            className={`rounded-xl px-3 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60 ${
+                              order.status === status
+                                ? "bg-[#0b6b2b] text-white"
+                                : "bg-white text-slate-600"
+                            }`}
+                          >
+                            {updatingOrderId === order.id
+                              ? "Đang lưu..."
+                              : statusText[status]}
+                          </button>
+                        )
+                      )}
+
                       <button
-                        disabled={updatingOrderId === order.id}
-                        key={status}
                         type="button"
-                        onClick={() => updateOrderStatus(order.id, status)}
+                        disabled={updatingOrderId === order.id}
+                        onClick={() => updateOrderStatus(order.id, "cancelled")}
                         className={`rounded-xl px-3 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60 ${
-                          order.status === status
-                            ? "bg-[#0b6b2b] text-white"
-                            : "bg-white text-slate-600"
+                          order.status === "cancelled"
+                            ? "bg-red-500 text-white"
+                            : "bg-white text-red-500"
                         }`}
                       >
-                        {updatingOrderId === order.id
-                          ? "Đang lưu..."
-                          : statusText[status]}
+                        {updatingOrderId === order.id ? "Đang lưu..." : "Hủy"}
                       </button>
-                    )
-                  )}
 
-                  <button
-                    type="button"
-                    disabled={updatingOrderId === order.id}
-                    onClick={() => updateOrderStatus(order.id, "cancelled")}
-                    className={`rounded-xl px-3 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60 ${
-                      order.status === "cancelled"
-                        ? "bg-red-500 text-white"
-                        : "bg-white text-red-500"
-                    }`}
-                  >
-                    {updatingOrderId === order.id ? "Đang lưu..." : "Hủy"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOrder(order)}
-                    className="rounded-xl bg-orange-500 px-3 py-2 text-sm font-black text-white"
-                  >
-                    Chi tiết
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrder(order)}
+                        className="rounded-xl bg-orange-500 px-3 py-2 text-sm font-black text-white"
+                      >
+                        Chi tiết
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              ))}
+
+              {!filteredOrders.length && (
+                <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
+                  Không có đơn hàng phù hợp với bộ lọc.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 rounded-2xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-bold text-slate-600">
+                Hiển thị {startItem} - {endItem} trong {filteredOrders.length} đơn
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={orderPage <= 1}
+                  onClick={() => setOrderPage((prev) => Math.max(1, prev - 1))}
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Trước
+                </button>
+
+                {Array.from({ length: totalOrderPages }).map((_, index) => {
+                  const page = index + 1;
+                  const shouldShow =
+                    page === 1 ||
+                    page === totalOrderPages ||
+                    Math.abs(page - orderPage) <= 1;
+
+                  if (!shouldShow) {
+                    if (page === orderPage - 2 || page === orderPage + 2) {
+                      return (
+                        <span key={page} className="px-1 text-slate-400">
+                          ...
+                        </span>
+                      );
+                    }
+
+                    return null;
+                  }
+
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => setOrderPage(page)}
+                      className={`h-10 min-w-10 rounded-xl px-3 text-sm font-black ${
+                        orderPage === page
+                          ? "bg-[#0b6b2b] text-white"
+                          : "bg-white text-slate-700 shadow-sm"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  disabled={orderPage >= totalOrderPages}
+                  onClick={() =>
+                    setOrderPage((prev) => Math.min(totalOrderPages, prev + 1))
+                  }
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Sau
+                </button>
               </div>
             </div>
-          ))}
-
-          {!orders.length && (
-            <p className="rounded-2xl bg-slate-50 p-4 text-slate-500">
-              Chưa có đơn hàng.
-            </p>
-          )}
-        </div>
-      )}
-    </section>
-  );
+          </>
+        )}
+      </section>
+    );
+  };
 
   const renderInventoryTab = () => (
     <div className="space-y-8">
